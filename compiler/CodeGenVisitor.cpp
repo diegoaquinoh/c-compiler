@@ -20,6 +20,9 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     std::cout << "    movq %rsp, %rbp\n";
     std::cout << "    subq $" << stackSize << ", %rsp\n";
 
+    // Initialize implicit return value slot at -4(%rbp)
+    std::cout << "    movl $0, -4(%rbp)\n";
+
     // Visit all statements
     for (auto *stmt : ctx->stmt()) {
         this->visit(stmt);

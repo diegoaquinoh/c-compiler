@@ -28,5 +28,5 @@ class SymbolTableVisitor: public ifccBaseVisitor {
     private:
         map<string, int> symbolTable;
         set<string> usedVars;
-        int nextIndex = 0;
+        int nextIndex = -4;
 };
