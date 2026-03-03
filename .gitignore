@@ -1,1 +1,4 @@
 antlr/
+compiler/config.mk
+
+compiler/build/
