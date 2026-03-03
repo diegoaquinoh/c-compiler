@@ -8,6 +8,7 @@
 #include "generated/ifccParser.h"
 #include "generated/ifccBaseVisitor.h"
 
+#include "SymbolTableVisitor.h"
 #include "CodeGenVisitor.h"
 
 using namespace antlr4;
@@ -48,8 +49,12 @@ int main(int argn, const char **argv)
       exit(1);
   }
 
-  
-  CodeGenVisitor v;
+  // First pass: build symbol table and check for errors
+  SymbolTableVisitor stv;
+  stv.visit(tree);
+
+  // Second pass: generate code using the symbol table
+  CodeGenVisitor v(stv.getSymbolTable());
   v.visit(tree);
 
   return 0;
