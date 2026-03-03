@@ -3,3 +3,8 @@ compiler/config.mk
 
 compiler/build/
 compiler/ifcc
+
+ifcc-test-output/
+ret42
+ret42.o
+ret42.s
