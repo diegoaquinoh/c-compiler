@@ -2,3 +2,4 @@ antlr/
 compiler/config.mk
 
 compiler/build/
+compiler/ifcc
