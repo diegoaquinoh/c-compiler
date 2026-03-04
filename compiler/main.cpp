@@ -49,11 +49,15 @@ int main(int argn, const char **argv)
       exit(1);
   }
 
-  // First pass: build symbol table and check for errors
+  // First Visitor: build symbol table and check for errors
   SymbolTableVisitor stv;
   stv.visit(tree);
 
-  // Second pass: generate code using the symbol table
+  if (stv.hasError()) {
+      exit(1);
+  }
+
+  // Second Visitor: generate code using the symbol table
   CodeGenVisitor v(stv.getSymbolTable());
   v.visit(tree);
 

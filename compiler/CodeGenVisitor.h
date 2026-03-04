@@ -10,7 +10,6 @@ using namespace std;
 class CodeGenVisitor : public ifccBaseVisitor {
 	public:
         map<string, int> symbolTable;
-        // Constructor takes the symbol table built by SymbolTableVisitor
         CodeGenVisitor(const map<string, int> &symTable) : symbolTable(symTable) {}
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;

@@ -25,8 +25,10 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         virtual antlrcpp::Any visitReturnVar(ifccParser::ReturnVarContext *ctx) override ;
 
         map<string, int> getSymbolTable() const { return symbolTable; }
+        bool hasError() const { return errorFlag; }
     private:
         map<string, int> symbolTable;
         set<string> usedVars;
         int nextIndex = -4;
+        bool errorFlag = false;
 };

@@ -4,7 +4,8 @@ using namespace std;
 int SymbolTableVisitor::declareVar(const std::string &name) {
     if (symbolTable.count(name)) {
         cerr << "error: variable '" << name << "' declared multiple times\n";
-        return symbolTable[name]; // reuse existing slot
+        errorFlag = true;
+        return symbolTable[name]; 
     }
     nextIndex -= 4;
     symbolTable[name] = nextIndex;
@@ -14,6 +15,7 @@ int SymbolTableVisitor::declareVar(const std::string &name) {
 void SymbolTableVisitor::useVar(const std::string &name) {
     if (!symbolTable.count(name)) {
         cerr << "error: variable '" << name << "' used before declaration\n";
+        errorFlag = true;
     } else {
         usedVars.insert(name);
     }
@@ -27,7 +29,7 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
     this->visit(ctx->return_stmt());
 
     // Check that every declared variable is used at least once
-    for (auto &[name, idx] : symbolTable) { // & to work directly with the map entries
+    for (auto &[name, idx] : symbolTable) {
         if (!usedVars.count(name)) {
             cerr << "warning: variable '" << name << "' declared but never used\n";
         }

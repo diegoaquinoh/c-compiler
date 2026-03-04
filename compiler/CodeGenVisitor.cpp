@@ -1,27 +1,22 @@
 #include "CodeGenVisitor.h"
+using namespace std;
 
 antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
-    // Compute stack frame size aligned to 16 bytes
-    int stackSize = (int)symbolTable.size() * 4;
-    stackSize = ((stackSize + 15) / 16) * 16;
-    if (stackSize == 0) stackSize = 16;
-
     #ifdef __APPLE__
-    std::cout << "    .globl _main\n";
-    std::cout << "_main:\n";
+    cout << "    .globl _main\n";
+    cout << "_main:\n";
     #else
-    std::cout << "    .globl main\n";
-    std::cout << "main:\n";
+    cout << "    .globl main\n";
+    cout << "main:\n";
     #endif
 
     // Prologue
-    std::cout << "    pushq %rbp\n";
-    std::cout << "    movq %rsp, %rbp\n";
-    std::cout << "    subq $" << stackSize << ", %rsp\n";
+    cout << "    pushq %rbp\n";
+    cout << "    movq %rsp, %rbp\n";
 
     // Initialize implicit return value slot at -4(%rbp)
-    std::cout << "    movl $0, -4(%rbp)\n";
+    cout << "    movl $0, -4(%rbp)\n";
 
     // Visit all statements
     for (auto *stmt : ctx->stmt()) {
@@ -31,72 +26,70 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Visit return statement
     this->visit(ctx->return_stmt());
 
+    // Epilogue
+    cout << "    popq %rbp\n";
+    cout << "    retq\n";
+
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitDeclVoid(ifccParser::DeclVoidContext *ctx)
 {
-    // No code needed: variable slot is already reserved on the stack
+    // No code needed
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitDeclConst(ifccParser::DeclConstContext *ctx)
 {
-    std::string varName = ctx->VAR()->getText();
+    string varName = ctx->VAR()->getText();
     int val = stoi(ctx->CONST()->getText());
     int offset = symbolTable[varName];
-    std::cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
+    cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitDeclVar(ifccParser::DeclVarContext *ctx)
 {
-    // int VAR(0) = VAR(1)
-    std::string dst = ctx->VAR(0)->getText();
-    std::string src = ctx->VAR(1)->getText();
-    int offsetSrc = symbolTable[src];
-    int offsetDst = symbolTable[dst];
-    std::cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-    std::cout << "    movl %eax, " << offsetDst << "(%rbp)\n";
+    string var1 = ctx->VAR(0)->getText();
+    string var2 = ctx->VAR(1)->getText();
+    int offsetVar1 = symbolTable[var1];
+    int offsetVar2 = symbolTable[var2];
+    cout << "    movl " << offsetVar2 << "(%rbp), %eax\n";
+    cout << "    movl %eax, " << offsetVar1 << "(%rbp)\n";
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitAffectConst(ifccParser::AffectConstContext *ctx)
 {
-    std::string varName = ctx->VAR()->getText();
+    string varName = ctx->VAR()->getText();
     int val = stoi(ctx->CONST()->getText());
     int offset = symbolTable[varName];
-    std::cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
+    cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitAffectVar(ifccParser::AffectVarContext *ctx)
 {
-    // VAR(0) = VAR(1)
-    std::string dst = ctx->VAR(0)->getText();
-    std::string src = ctx->VAR(1)->getText();
-    int offsetSrc = symbolTable[src];
-    int offsetDst = symbolTable[dst];
-    std::cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-    std::cout << "    movl %eax, " << offsetDst << "(%rbp)\n";
+    string var1 = ctx->VAR(0)->getText();
+    string var2 = ctx->VAR(1)->getText();
+    int offsetVar1 = symbolTable[var1];
+    int offsetVar2 = symbolTable[var2];
+    cout << "    movl " << offsetVar2 << "(%rbp), %eax\n";
+    cout << "    movl %eax, " << offsetVar1 << "(%rbp)\n";
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitReturnConst(ifccParser::ReturnConstContext *ctx)
 {
     int val = stoi(ctx->CONST()->getText());
-    std::cout << "    movl $" << val << ", %eax\n";
-    std::cout << "    leave\n";
-    std::cout << "    ret\n";
+    cout << "    movl $" << val << ", %eax\n";
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitReturnVar(ifccParser::ReturnVarContext *ctx)
 {
-    std::string varName = ctx->VAR()->getText();
+    string varName = ctx->VAR()->getText();
     int offset = symbolTable[varName];
-    std::cout << "    movl " << offset << "(%rbp), %eax\n";
-    std::cout << "    leave\n";
-    std::cout << "    ret\n";
+    cout << "    movl " << offset << "(%rbp), %eax\n";
     return 0;
 }
