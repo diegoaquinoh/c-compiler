@@ -9,5 +9,5 @@ ret42
 ret42.o
 ret42.s
 
-generated/
+compiler/generated/
 /DS_Store
