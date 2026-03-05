@@ -13,7 +13,15 @@ affect_stmt: VAR '=' expr ';' ;
 
 return_stmt : RETURN expr ';' ;
 
-expr: CONST | VAR ;
+
+expr : '-' expr                # negative
+     | expr OP=('*'|'/') expr  # mult
+     | expr OP=('+'|'-') expr  # addsub
+     | '(' expr ')'            # parens
+     | CONST                   # const
+     | VAR                     # var
+     ;
+
 
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
