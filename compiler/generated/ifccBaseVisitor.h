@@ -23,15 +23,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitDeclVoid(ifccParser::DeclVoidContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitDeclConst(ifccParser::DeclConstContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitDeclVar(ifccParser::DeclVarContext *ctx) override {
+  virtual std::any visitDeclList(ifccParser::DeclListContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -40,6 +32,18 @@ public:
   }
 
   virtual std::any visitAffectVar(ifccParser::AffectVarContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitDeclItemConst(ifccParser::DeclItemConstContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitDeclItemVar(ifccParser::DeclItemVarContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitDeclItemVoid(ifccParser::DeclItemVoidContext *ctx) override {
     return visitChildren(ctx);
   }
 

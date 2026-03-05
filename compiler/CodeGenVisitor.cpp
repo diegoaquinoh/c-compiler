@@ -33,33 +33,34 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitDeclVoid(ifccParser::DeclVoidContext *ctx)
+antlrcpp::Any CodeGenVisitor::visitDeclList(ifccParser::DeclListContext *ctx)
 {
-    // No code needed
-    return 0;
-}
-
-antlrcpp::Any CodeGenVisitor::visitDeclConst(ifccParser::DeclConstContext *ctx)
-{
-    auto vars = ctx->VAR();
-    auto consts = ctx->CONST();
-    for (int i = 0; i < vars.size(); i++) {
-        int val = stoi(consts[i]->getText());
-        int offset = symbolTable[vars[i]->getText()];
-        cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
+    for (auto *item : ctx->decl_item()) {
+        this->visit(item);
     }
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitDeclVar(ifccParser::DeclVarContext *ctx)
+antlrcpp::Any CodeGenVisitor::visitDeclItemVoid(ifccParser::DeclItemVoidContext *ctx)
 {
-    auto vars = ctx->VAR();
-    for (int i = 0; i + 1 < vars.size(); i += 2) {
-        int offsetVar1 = symbolTable[vars[i]->getText()];
-        int offsetVar2 = symbolTable[vars[i + 1]->getText()];
-        cout << "    movl " << offsetVar2 << "(%rbp), %eax\n";
-        cout << "    movl %eax, " << offsetVar1 << "(%rbp)\n";
-    }
+    // Nothing to generate for void declarations
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitDeclItemConst(ifccParser::DeclItemConstContext *ctx)
+{
+    int val = stoi(ctx->CONST()->getText());
+    int offset = symbolTable[ctx->VAR()->getText()];
+    cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitDeclItemVar(ifccParser::DeclItemVarContext *ctx)
+{
+    int offsetSrc = symbolTable[ctx->VAR(1)->getText()];
+    int offsetDst = symbolTable[ctx->VAR(0)->getText()];
+    cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+    cout << "    movl %eax, " << offsetDst << "(%rbp)\n";
     return 0;
 }
 
