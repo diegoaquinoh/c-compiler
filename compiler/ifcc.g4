@@ -4,19 +4,16 @@ axiom : prog EOF ;
 
 prog : 'int' 'main' '(' ')' '{' stmt* return_stmt '}' ;
 
-stmt : 'int' decl_item (',' decl_item)* ';'  #declList
-     | VAR '=' CONST ';'                       #affectConst
-     | VAR '=' VAR ';'                         #affectVar
-     ;
+stmt : decl_stmt | affect_stmt ;
 
-decl_item : VAR '=' CONST  #declItemConst
-          | VAR '=' VAR    #declItemVar
-          | VAR             #declItemVoid
-          ;
+decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
+decl_item : VAR ('=' expr)? ;
 
-return_stmt : RETURN CONST ';'     #returnConst
-            | RETURN VAR ';'       #returnVar
-            ;
+affect_stmt: VAR '=' expr ';' ;
+
+return_stmt : RETURN expr ';' ;
+
+expr: CONST | VAR ;
 
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
