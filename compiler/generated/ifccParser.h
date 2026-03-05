@@ -18,7 +18,7 @@ public:
   };
 
   enum {
-    RuleAxiom = 0, RuleProg = 1, RuleStmt = 2, RuleReturn_stmt = 3
+    RuleAxiom = 0, RuleProg = 1, RuleStmt = 2, RuleDecl_item = 3, RuleReturn_stmt = 4
   };
 
   explicit ifccParser(antlr4::TokenStream *input);
@@ -41,6 +41,7 @@ public:
   class AxiomContext;
   class ProgContext;
   class StmtContext;
+  class Decl_itemContext;
   class Return_stmtContext; 
 
   class  AxiomContext : public antlr4::ParserRuleContext {
@@ -85,28 +86,6 @@ public:
    
   };
 
-  class  DeclConstContext : public StmtContext {
-  public:
-    DeclConstContext(StmtContext *ctx);
-
-    std::vector<antlr4::tree::TerminalNode *> VAR();
-    antlr4::tree::TerminalNode* VAR(size_t i);
-    std::vector<antlr4::tree::TerminalNode *> CONST();
-    antlr4::tree::TerminalNode* CONST(size_t i);
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  DeclVarContext : public StmtContext {
-  public:
-    DeclVarContext(StmtContext *ctx);
-
-    std::vector<antlr4::tree::TerminalNode *> VAR();
-    antlr4::tree::TerminalNode* VAR(size_t i);
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
   class  AffectVarContext : public StmtContext {
   public:
     AffectVarContext(StmtContext *ctx);
@@ -117,12 +96,12 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  DeclVoidContext : public StmtContext {
+  class  DeclListContext : public StmtContext {
   public:
-    DeclVoidContext(StmtContext *ctx);
+    DeclListContext(StmtContext *ctx);
 
-    std::vector<antlr4::tree::TerminalNode *> VAR();
-    antlr4::tree::TerminalNode* VAR(size_t i);
+    std::vector<Decl_itemContext *> decl_item();
+    Decl_itemContext* decl_item(size_t i);
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -138,6 +117,50 @@ public:
   };
 
   StmtContext* stmt();
+
+  class  Decl_itemContext : public antlr4::ParserRuleContext {
+  public:
+    Decl_itemContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+   
+    Decl_itemContext() = default;
+    void copyFrom(Decl_itemContext *context);
+    using antlr4::ParserRuleContext::copyFrom;
+
+    virtual size_t getRuleIndex() const override;
+
+   
+  };
+
+  class  DeclItemConstContext : public Decl_itemContext {
+  public:
+    DeclItemConstContext(Decl_itemContext *ctx);
+
+    antlr4::tree::TerminalNode *VAR();
+    antlr4::tree::TerminalNode *CONST();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  DeclItemVarContext : public Decl_itemContext {
+  public:
+    DeclItemVarContext(Decl_itemContext *ctx);
+
+    std::vector<antlr4::tree::TerminalNode *> VAR();
+    antlr4::tree::TerminalNode* VAR(size_t i);
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  DeclItemVoidContext : public Decl_itemContext {
+  public:
+    DeclItemVoidContext(Decl_itemContext *ctx);
+
+    antlr4::tree::TerminalNode *VAR();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  Decl_itemContext* decl_item();
 
   class  Return_stmtContext : public antlr4::ParserRuleContext {
   public:

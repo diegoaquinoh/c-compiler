@@ -4,12 +4,15 @@ axiom : prog EOF ;
 
 prog : 'int' 'main' '(' ')' '{' stmt* return_stmt '}' ;
 
-stmt : 'int' VAR (',' VAR)* ';'    #declVoid
-     | 'int' VAR '=' CONST (',' VAR '=' CONST)* ';'     #declConst
-     | 'int' VAR '=' VAR (',' VAR '=' VAR)* ';'  #declVar
-     | VAR '=' CONST ';'           #affectConst
-     | VAR '=' VAR ';'             #affectVar
+stmt : 'int' decl_item (',' decl_item)* ';'  #declList
+     | VAR '=' CONST ';'                       #affectConst
+     | VAR '=' VAR ';'                         #affectVar
      ;
+
+decl_item : VAR '=' CONST  #declItemConst
+          | VAR '=' VAR    #declItemVar
+          | VAR             #declItemVoid
+          ;
 
 return_stmt : RETURN CONST ';'     #returnConst
             | RETURN VAR ';'       #returnVar

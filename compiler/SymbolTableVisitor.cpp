@@ -37,27 +37,26 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitDeclVoid(ifccParser::DeclVoidContext *ctx) {
-    for (auto *var : ctx->VAR()) {
-        declareVar(var->getText());
+antlrcpp::Any SymbolTableVisitor::visitDeclList(ifccParser::DeclListContext *ctx) {
+    for (auto *item : ctx->decl_item()) {
+        this->visit(item);
     }
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitDeclConst(ifccParser::DeclConstContext *ctx) {
-    for (auto *var : ctx->VAR()) {
-        declareVar(var->getText());
-    }
+antlrcpp::Any SymbolTableVisitor::visitDeclItemVoid(ifccParser::DeclItemVoidContext *ctx) {
+    declareVar(ctx->VAR()->getText());
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitDeclVar(ifccParser::DeclVarContext *ctx) {
-    auto vars = ctx->VAR();
-    // pairs: (0→declared, 1→used), (2→declared, 3→used), ...
-    for (size_t i = 0; i + 1 < vars.size(); i += 2) {
-        useVar(vars[i + 1]->getText());
-        declareVar(vars[i]->getText());
-    }
+antlrcpp::Any SymbolTableVisitor::visitDeclItemConst(ifccParser::DeclItemConstContext *ctx) {
+    declareVar(ctx->VAR()->getText());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitDeclItemVar(ifccParser::DeclItemVarContext *ctx) {
+    useVar(ctx->VAR(1)->getText());
+    declareVar(ctx->VAR(0)->getText());
     return 0;
 }
 
@@ -73,6 +72,7 @@ antlrcpp::Any SymbolTableVisitor::visitAffectVar(ifccParser::AffectVarContext *c
 }
 
 antlrcpp::Any SymbolTableVisitor::visitReturnConst(ifccParser::ReturnConstContext *ctx) {
+    // Nothing to do
     return 0;
 }
 
