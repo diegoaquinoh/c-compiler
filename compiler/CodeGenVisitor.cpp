@@ -33,7 +33,7 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitDeclList(ifccParser::DeclListContext *ctx)
+antlrcpp::Any CodeGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
@@ -41,60 +41,48 @@ antlrcpp::Any CodeGenVisitor::visitDeclList(ifccParser::DeclListContext *ctx)
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitDeclItemVoid(ifccParser::DeclItemVoidContext *ctx)
-{
-    // Nothing to generate for void declarations
-    return 0;
-}
-
-antlrcpp::Any CodeGenVisitor::visitDeclItemConst(ifccParser::DeclItemConstContext *ctx)
-{
-    int val = stoi(ctx->CONST()->getText());
-    int offset = symbolTable[ctx->VAR()->getText()];
-    cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
-    return 0;
-}
-
-antlrcpp::Any CodeGenVisitor::visitDeclItemVar(ifccParser::DeclItemVarContext *ctx)
-{
-    int offsetSrc = symbolTable[ctx->VAR(1)->getText()];
-    int offsetDst = symbolTable[ctx->VAR(0)->getText()];
-    cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-    cout << "    movl %eax, " << offsetDst << "(%rbp)\n";
-    return 0;
-}
-
-antlrcpp::Any CodeGenVisitor::visitAffectConst(ifccParser::AffectConstContext *ctx)
-{
-    string varName = ctx->VAR()->getText();
-    int val = stoi(ctx->CONST()->getText());
-    int offset = symbolTable[varName];
-    cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
-    return 0;
-}
-
-antlrcpp::Any CodeGenVisitor::visitAffectVar(ifccParser::AffectVarContext *ctx)
-{
-    string var1 = ctx->VAR(0)->getText();
-    string var2 = ctx->VAR(1)->getText();
-    int offsetVar1 = symbolTable[var1];
-    int offsetVar2 = symbolTable[var2];
-    cout << "    movl " << offsetVar2 << "(%rbp), %eax\n";
-    cout << "    movl %eax, " << offsetVar1 << "(%rbp)\n";
-    return 0;
-}
-
-antlrcpp::Any CodeGenVisitor::visitReturnConst(ifccParser::ReturnConstContext *ctx)
-{
-    int val = stoi(ctx->CONST()->getText());
-    cout << "    movl $" << val << ", %eax\n";
-    return 0;
-}
-
-antlrcpp::Any CodeGenVisitor::visitReturnVar(ifccParser::ReturnVarContext *ctx)
+antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
     string varName = ctx->VAR()->getText();
     int offset = symbolTable[varName];
-    cout << "    movl " << offset << "(%rbp), %eax\n";
+
+    if (ctx->expr()) {
+        if (ctx->expr()->CONST()) {
+            int val = stoi(ctx->expr()->CONST()->getText());
+            cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
+        } else {
+            int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
+            cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+            cout << "    movl %eax, " << offset << "(%rbp)\n";
+        }
+    }
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx)
+{
+    string varName = ctx->VAR()->getText();
+    int offset = symbolTable[varName];
+
+    if (ctx->expr()->CONST()) {
+        int val = stoi(ctx->expr()->CONST()->getText());
+        cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
+    } else {
+        int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
+        cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+        cout << "    movl %eax, " << offset << "(%rbp)\n";
+    }
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
+{
+    if (ctx->expr()->CONST()) {
+        int val = stoi(ctx->expr()->CONST()->getText());
+        cout << "    movl $" << val << ", %eax\n";
+    } else {
+        int offset = symbolTable[ctx->expr()->VAR()->getText()];
+        cout << "    movl " << offset << "(%rbp), %eax\n";
+    }
     return 0;
 }
