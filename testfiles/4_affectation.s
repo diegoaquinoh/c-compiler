@@ -12,10 +12,11 @@ _main:                                  ## @main
 	.cfi_def_cfa_register %rbp
 	movl	$0, -4(%rbp)
 	movl	$10, -12(%rbp)
+	movl	$30, -16(%rbp)
 	movl	-8(%rbp), %eax
-	movl	%eax, -16(%rbp)
+	movl	%eax, -20(%rbp)
 	movl	-12(%rbp), %eax
-	movl	%eax, -16(%rbp)
+	movl	%eax, -20(%rbp)
 	movl	$20, -12(%rbp)
 	movl	-12(%rbp), %eax
 	popq	%rbp

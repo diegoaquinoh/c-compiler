@@ -55,30 +55,39 @@ void ifccParserInitialize() {
       "axiom", "prog", "stmt", "return_stmt"
     },
     std::vector<std::string>{
-      "", "'int'", "'main'", "'('", "')'", "'{'", "'}'", "';'", "'='", "'return'"
+      "", "'int'", "'main'", "'('", "')'", "'{'", "'}'", "','", "';'", "'='", 
+      "'return'"
     },
     std::vector<std::string>{
-      "", "", "", "", "", "", "", "", "", "RETURN", "VAR", "CONST", "COMMENT", 
-      "DIRECTIVE", "WS"
+      "", "", "", "", "", "", "", "", "", "", "RETURN", "VAR", "CONST", 
+      "COMMENT", "DIRECTIVE", "WS"
     }
   );
   static const int32_t serializedATNSegment[] = {
-  	4,1,14,57,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,1,0,1,0,1,0,1,1,1,1,1,1,1,1,
-  	1,1,1,1,5,1,18,8,1,10,1,12,1,21,9,1,1,1,1,1,1,1,1,2,1,2,1,2,1,2,1,2,1,
-  	2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,3,2,47,
-  	8,2,1,3,1,3,1,3,1,3,1,3,1,3,3,3,55,8,3,1,3,0,0,4,0,2,4,6,0,0,58,0,8,1,
-  	0,0,0,2,11,1,0,0,0,4,46,1,0,0,0,6,54,1,0,0,0,8,9,3,2,1,0,9,10,5,0,0,1,
-  	10,1,1,0,0,0,11,12,5,1,0,0,12,13,5,2,0,0,13,14,5,3,0,0,14,15,5,4,0,0,
-  	15,19,5,5,0,0,16,18,3,4,2,0,17,16,1,0,0,0,18,21,1,0,0,0,19,17,1,0,0,0,
-  	19,20,1,0,0,0,20,22,1,0,0,0,21,19,1,0,0,0,22,23,3,6,3,0,23,24,5,6,0,0,
-  	24,3,1,0,0,0,25,26,5,1,0,0,26,27,5,10,0,0,27,47,5,7,0,0,28,29,5,1,0,0,
-  	29,30,5,10,0,0,30,31,5,8,0,0,31,32,5,11,0,0,32,47,5,7,0,0,33,34,5,1,0,
-  	0,34,35,5,10,0,0,35,36,5,8,0,0,36,37,5,10,0,0,37,47,5,7,0,0,38,39,5,10,
-  	0,0,39,40,5,8,0,0,40,41,5,11,0,0,41,47,5,7,0,0,42,43,5,10,0,0,43,44,5,
-  	8,0,0,44,45,5,10,0,0,45,47,5,7,0,0,46,25,1,0,0,0,46,28,1,0,0,0,46,33,
-  	1,0,0,0,46,38,1,0,0,0,46,42,1,0,0,0,47,5,1,0,0,0,48,49,5,9,0,0,49,50,
-  	5,11,0,0,50,55,5,7,0,0,51,52,5,9,0,0,52,53,5,10,0,0,53,55,5,7,0,0,54,
-  	48,1,0,0,0,54,51,1,0,0,0,55,7,1,0,0,0,3,19,46,54
+  	4,1,15,82,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,1,0,1,0,1,0,1,1,1,1,1,1,1,1,
+  	1,1,1,1,5,1,18,8,1,10,1,12,1,21,9,1,1,1,1,1,1,1,1,2,1,2,1,2,1,2,5,2,30,
+  	8,2,10,2,12,2,33,9,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,5,2,44,8,2,10,
+  	2,12,2,47,9,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,5,2,58,8,2,10,2,12,
+  	2,61,9,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,1,2,3,2,72,8,2,1,3,1,3,1,3,1,
+  	3,1,3,1,3,3,3,80,8,3,1,3,0,0,4,0,2,4,6,0,0,86,0,8,1,0,0,0,2,11,1,0,0,
+  	0,4,71,1,0,0,0,6,79,1,0,0,0,8,9,3,2,1,0,9,10,5,0,0,1,10,1,1,0,0,0,11,
+  	12,5,1,0,0,12,13,5,2,0,0,13,14,5,3,0,0,14,15,5,4,0,0,15,19,5,5,0,0,16,
+  	18,3,4,2,0,17,16,1,0,0,0,18,21,1,0,0,0,19,17,1,0,0,0,19,20,1,0,0,0,20,
+  	22,1,0,0,0,21,19,1,0,0,0,22,23,3,6,3,0,23,24,5,6,0,0,24,3,1,0,0,0,25,
+  	26,5,1,0,0,26,31,5,11,0,0,27,28,5,7,0,0,28,30,5,11,0,0,29,27,1,0,0,0,
+  	30,33,1,0,0,0,31,29,1,0,0,0,31,32,1,0,0,0,32,34,1,0,0,0,33,31,1,0,0,0,
+  	34,72,5,8,0,0,35,36,5,1,0,0,36,37,5,11,0,0,37,38,5,9,0,0,38,45,5,12,0,
+  	0,39,40,5,7,0,0,40,41,5,11,0,0,41,42,5,9,0,0,42,44,5,12,0,0,43,39,1,0,
+  	0,0,44,47,1,0,0,0,45,43,1,0,0,0,45,46,1,0,0,0,46,48,1,0,0,0,47,45,1,0,
+  	0,0,48,72,5,8,0,0,49,50,5,1,0,0,50,51,5,11,0,0,51,52,5,9,0,0,52,59,5,
+  	11,0,0,53,54,5,7,0,0,54,55,5,11,0,0,55,56,5,9,0,0,56,58,5,11,0,0,57,53,
+  	1,0,0,0,58,61,1,0,0,0,59,57,1,0,0,0,59,60,1,0,0,0,60,62,1,0,0,0,61,59,
+  	1,0,0,0,62,72,5,8,0,0,63,64,5,11,0,0,64,65,5,9,0,0,65,66,5,12,0,0,66,
+  	72,5,8,0,0,67,68,5,11,0,0,68,69,5,9,0,0,69,70,5,11,0,0,70,72,5,8,0,0,
+  	71,25,1,0,0,0,71,35,1,0,0,0,71,49,1,0,0,0,71,63,1,0,0,0,71,67,1,0,0,0,
+  	72,5,1,0,0,0,73,74,5,10,0,0,74,75,5,12,0,0,75,80,5,8,0,0,76,77,5,10,0,
+  	0,77,78,5,11,0,0,78,80,5,8,0,0,79,73,1,0,0,0,79,76,1,0,0,0,80,7,1,0,0,
+  	0,6,19,31,45,59,71,79
   };
   staticData->serializedATN = antlr4::atn::SerializedATNView(serializedATNSegment, sizeof(serializedATNSegment) / sizeof(serializedATNSegment[0]));
 
@@ -281,12 +290,20 @@ void ifccParser::StmtContext::copyFrom(StmtContext *ctx) {
 
 //----------------- DeclConstContext ------------------------------------------------------------------
 
-tree::TerminalNode* ifccParser::DeclConstContext::VAR() {
-  return getToken(ifccParser::VAR, 0);
+std::vector<tree::TerminalNode *> ifccParser::DeclConstContext::VAR() {
+  return getTokens(ifccParser::VAR);
 }
 
-tree::TerminalNode* ifccParser::DeclConstContext::CONST() {
-  return getToken(ifccParser::CONST, 0);
+tree::TerminalNode* ifccParser::DeclConstContext::VAR(size_t i) {
+  return getToken(ifccParser::VAR, i);
+}
+
+std::vector<tree::TerminalNode *> ifccParser::DeclConstContext::CONST() {
+  return getTokens(ifccParser::CONST);
+}
+
+tree::TerminalNode* ifccParser::DeclConstContext::CONST(size_t i) {
+  return getToken(ifccParser::CONST, i);
 }
 
 ifccParser::DeclConstContext::DeclConstContext(StmtContext *ctx) { copyFrom(ctx); }
@@ -338,8 +355,12 @@ std::any ifccParser::AffectVarContext::accept(tree::ParseTreeVisitor *visitor) {
 }
 //----------------- DeclVoidContext ------------------------------------------------------------------
 
-tree::TerminalNode* ifccParser::DeclVoidContext::VAR() {
-  return getToken(ifccParser::VAR, 0);
+std::vector<tree::TerminalNode *> ifccParser::DeclVoidContext::VAR() {
+  return getTokens(ifccParser::VAR);
+}
+
+tree::TerminalNode* ifccParser::DeclVoidContext::VAR(size_t i) {
+  return getToken(ifccParser::VAR, i);
 }
 
 ifccParser::DeclVoidContext::DeclVoidContext(StmtContext *ctx) { copyFrom(ctx); }
@@ -373,6 +394,7 @@ std::any ifccParser::AffectConstContext::accept(tree::ParseTreeVisitor *visitor)
 ifccParser::StmtContext* ifccParser::stmt() {
   StmtContext *_localctx = _tracker.createInstance<StmtContext>(_ctx, getState());
   enterRule(_localctx, 4, ifccParser::RuleStmt);
+  size_t _la = 0;
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -382,9 +404,9 @@ ifccParser::StmtContext* ifccParser::stmt() {
     exitRule();
   });
   try {
-    setState(46);
+    setState(71);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 1, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 4, _ctx)) {
     case 1: {
       _localctx = _tracker.createInstance<ifccParser::DeclVoidContext>(_localctx);
       enterOuterAlt(_localctx, 1);
@@ -392,68 +414,112 @@ ifccParser::StmtContext* ifccParser::stmt() {
       match(ifccParser::T__0);
       setState(26);
       match(ifccParser::VAR);
-      setState(27);
-      match(ifccParser::T__6);
+      setState(31);
+      _errHandler->sync(this);
+      _la = _input->LA(1);
+      while (_la == ifccParser::T__6) {
+        setState(27);
+        match(ifccParser::T__6);
+        setState(28);
+        match(ifccParser::VAR);
+        setState(33);
+        _errHandler->sync(this);
+        _la = _input->LA(1);
+      }
+      setState(34);
+      match(ifccParser::T__7);
       break;
     }
 
     case 2: {
       _localctx = _tracker.createInstance<ifccParser::DeclConstContext>(_localctx);
       enterOuterAlt(_localctx, 2);
-      setState(28);
+      setState(35);
       match(ifccParser::T__0);
-      setState(29);
+      setState(36);
       match(ifccParser::VAR);
-      setState(30);
-      match(ifccParser::T__7);
-      setState(31);
+      setState(37);
+      match(ifccParser::T__8);
+      setState(38);
       match(ifccParser::CONST);
-      setState(32);
-      match(ifccParser::T__6);
+      setState(45);
+      _errHandler->sync(this);
+      _la = _input->LA(1);
+      while (_la == ifccParser::T__6) {
+        setState(39);
+        match(ifccParser::T__6);
+        setState(40);
+        match(ifccParser::VAR);
+        setState(41);
+        match(ifccParser::T__8);
+        setState(42);
+        match(ifccParser::CONST);
+        setState(47);
+        _errHandler->sync(this);
+        _la = _input->LA(1);
+      }
+      setState(48);
+      match(ifccParser::T__7);
       break;
     }
 
     case 3: {
       _localctx = _tracker.createInstance<ifccParser::DeclVarContext>(_localctx);
       enterOuterAlt(_localctx, 3);
-      setState(33);
+      setState(49);
       match(ifccParser::T__0);
-      setState(34);
+      setState(50);
       match(ifccParser::VAR);
-      setState(35);
+      setState(51);
+      match(ifccParser::T__8);
+      setState(52);
+      match(ifccParser::VAR);
+      setState(59);
+      _errHandler->sync(this);
+      _la = _input->LA(1);
+      while (_la == ifccParser::T__6) {
+        setState(53);
+        match(ifccParser::T__6);
+        setState(54);
+        match(ifccParser::VAR);
+        setState(55);
+        match(ifccParser::T__8);
+        setState(56);
+        match(ifccParser::VAR);
+        setState(61);
+        _errHandler->sync(this);
+        _la = _input->LA(1);
+      }
+      setState(62);
       match(ifccParser::T__7);
-      setState(36);
-      match(ifccParser::VAR);
-      setState(37);
-      match(ifccParser::T__6);
       break;
     }
 
     case 4: {
       _localctx = _tracker.createInstance<ifccParser::AffectConstContext>(_localctx);
       enterOuterAlt(_localctx, 4);
-      setState(38);
+      setState(63);
       match(ifccParser::VAR);
-      setState(39);
-      match(ifccParser::T__7);
-      setState(40);
+      setState(64);
+      match(ifccParser::T__8);
+      setState(65);
       match(ifccParser::CONST);
-      setState(41);
-      match(ifccParser::T__6);
+      setState(66);
+      match(ifccParser::T__7);
       break;
     }
 
     case 5: {
       _localctx = _tracker.createInstance<ifccParser::AffectVarContext>(_localctx);
       enterOuterAlt(_localctx, 5);
-      setState(42);
+      setState(67);
       match(ifccParser::VAR);
-      setState(43);
+      setState(68);
+      match(ifccParser::T__8);
+      setState(69);
+      match(ifccParser::VAR);
+      setState(70);
       match(ifccParser::T__7);
-      setState(44);
-      match(ifccParser::VAR);
-      setState(45);
-      match(ifccParser::T__6);
       break;
     }
 
@@ -536,30 +602,30 @@ ifccParser::Return_stmtContext* ifccParser::return_stmt() {
     exitRule();
   });
   try {
-    setState(54);
+    setState(79);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 2, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 5, _ctx)) {
     case 1: {
       _localctx = _tracker.createInstance<ifccParser::ReturnConstContext>(_localctx);
       enterOuterAlt(_localctx, 1);
-      setState(48);
+      setState(73);
       match(ifccParser::RETURN);
-      setState(49);
+      setState(74);
       match(ifccParser::CONST);
-      setState(50);
-      match(ifccParser::T__6);
+      setState(75);
+      match(ifccParser::T__7);
       break;
     }
 
     case 2: {
       _localctx = _tracker.createInstance<ifccParser::ReturnVarContext>(_localctx);
       enterOuterAlt(_localctx, 2);
-      setState(51);
+      setState(76);
       match(ifccParser::RETURN);
-      setState(52);
+      setState(77);
       match(ifccParser::VAR);
-      setState(53);
-      match(ifccParser::T__6);
+      setState(78);
+      match(ifccParser::T__7);
       break;
     }
 

@@ -1,6 +1,8 @@
 int main(){
-    int a;
-    int b = 10;
+    int a, z;
+    int z = 12;
+    int b = 10, d = 30;
+    int e = b, c = d;
     int c = a;
     c = b;
     b = 20;

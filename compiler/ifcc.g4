@@ -4,9 +4,9 @@ axiom : prog EOF ;
 
 prog : 'int' 'main' '(' ')' '{' stmt* return_stmt '}' ;
 
-stmt : 'int' VAR ';'                #declVoid
-     | 'int' VAR '=' CONST ';'     #declConst
-     | 'int' VAR '=' VAR ';'       #declVar
+stmt : 'int' VAR (',' VAR)* ';'    #declVoid
+     | 'int' VAR '=' CONST (',' VAR '=' CONST)* ';'     #declConst
+     | 'int' VAR '=' VAR (',' VAR '=' VAR)* ';'  #declVar
      | VAR '=' CONST ';'           #affectConst
      | VAR '=' VAR ';'             #affectVar
      ;

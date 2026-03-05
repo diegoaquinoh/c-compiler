@@ -38,18 +38,26 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDeclVoid(ifccParser::DeclVoidContext *ctx) {
-    declareVar(ctx->VAR()->getText());
+    for (auto *var : ctx->VAR()) {
+        declareVar(var->getText());
+    }
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDeclConst(ifccParser::DeclConstContext *ctx) {
-    declareVar(ctx->VAR()->getText());
+    for (auto *var : ctx->VAR()) {
+        declareVar(var->getText());
+    }
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDeclVar(ifccParser::DeclVarContext *ctx) {
-    useVar(ctx->VAR(1)->getText());
-    declareVar(ctx->VAR(0)->getText());
+    auto vars = ctx->VAR();
+    // pairs: (0→declared, 1→used), (2→declared, 3→used), ...
+    for (size_t i = 0; i + 1 < vars.size(); i += 2) {
+        useVar(vars[i + 1]->getText());
+        declareVar(vars[i]->getText());
+    }
     return 0;
 }
 

@@ -13,8 +13,8 @@ class  ifccParser : public antlr4::Parser {
 public:
   enum {
     T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, T__4 = 5, T__5 = 6, T__6 = 7, 
-    T__7 = 8, RETURN = 9, VAR = 10, CONST = 11, COMMENT = 12, DIRECTIVE = 13, 
-    WS = 14
+    T__7 = 8, T__8 = 9, RETURN = 10, VAR = 11, CONST = 12, COMMENT = 13, 
+    DIRECTIVE = 14, WS = 15
   };
 
   enum {
@@ -89,8 +89,10 @@ public:
   public:
     DeclConstContext(StmtContext *ctx);
 
-    antlr4::tree::TerminalNode *VAR();
-    antlr4::tree::TerminalNode *CONST();
+    std::vector<antlr4::tree::TerminalNode *> VAR();
+    antlr4::tree::TerminalNode* VAR(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> CONST();
+    antlr4::tree::TerminalNode* CONST(size_t i);
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -119,7 +121,8 @@ public:
   public:
     DeclVoidContext(StmtContext *ctx);
 
-    antlr4::tree::TerminalNode *VAR();
+    std::vector<antlr4::tree::TerminalNode *> VAR();
+    antlr4::tree::TerminalNode* VAR(size_t i);
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
