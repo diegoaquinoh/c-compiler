@@ -6,9 +6,9 @@
 #include "generated/ifccBaseVisitor.h"
 
 
-class  CodeGenVisitor : public ifccBaseVisitor {
+class  CodeCheckerVisitor : public ifccBaseVisitor {
 	public:
-        std::unordered_map<std::string, int> symbolTable;
+        std::unordered_map <std::string, int> symbolTable;
         int nextOffset = -4; 
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;

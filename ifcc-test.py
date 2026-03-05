@@ -15,6 +15,10 @@ import shutil
 import sys
 import subprocess
 
+# Strict C mode for the GCC oracle used in test comparisons.
+# This aligns "valid/invalid" with the C standard and treats key diagnostics as errors.
+GCC_C_STRICT_FLAGS="-std=c11 -pedantic-errors -Werror=return-type"
+
 def run_command(string, logfile=None, toscreen=False):
     """ execute `string` as a shell command. Maybe write stdout+stderr to `logfile` and/or to the toscreen.
         return the exit status""" 
@@ -271,7 +275,7 @@ for jobname in jobs:
     os.chdir(jobname)
     
     ## Reference compiler = GCC
-    gccstatus=run_command("gcc -S -o asm-gcc.s input.c", "gcc-compile.txt")
+    gccstatus=run_command(f"gcc {GCC_C_STRICT_FLAGS} -S -o asm-gcc.s input.c", "gcc-compile.txt")
     if gccstatus == 0:
         # test-case is a valid program. we should run it
         gccstatus=run_command("gcc -o exe-gcc asm-gcc.s", "gcc-link.txt")

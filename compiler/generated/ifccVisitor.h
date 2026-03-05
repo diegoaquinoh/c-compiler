@@ -1,5 +1,5 @@
 
-// Generated from ifcc.g4 by ANTLR 4.13.2
+// Generated from ifcc.g4 by ANTLR 4.9
 
 #pragma once
 
@@ -19,23 +19,23 @@ public:
   /**
    * Visit parse trees produced by ifccParser.
    */
-    virtual std::any visitAxiom(ifccParser::AxiomContext *context) = 0;
+    virtual antlrcpp::Any visitAxiom(ifccParser::AxiomContext *context) = 0;
 
-    virtual std::any visitProg(ifccParser::ProgContext *context) = 0;
+    virtual antlrcpp::Any visitProg(ifccParser::ProgContext *context) = 0;
 
-    virtual std::any visitDeclVoid(ifccParser::DeclVoidContext *context) = 0;
+    virtual antlrcpp::Any visitStatement(ifccParser::StatementContext *context) = 0;
 
-    virtual std::any visitDeclConst(ifccParser::DeclConstContext *context) = 0;
+    virtual antlrcpp::Any visitReturn_const_stmt(ifccParser::Return_const_stmtContext *context) = 0;
 
-    virtual std::any visitDeclVar(ifccParser::DeclVarContext *context) = 0;
+    virtual antlrcpp::Any visitReturn_var_stmt(ifccParser::Return_var_stmtContext *context) = 0;
 
-    virtual std::any visitAffectConst(ifccParser::AffectConstContext *context) = 0;
+    virtual antlrcpp::Any visitInit_stmt_const(ifccParser::Init_stmt_constContext *context) = 0;
 
-    virtual std::any visitAffectVar(ifccParser::AffectVarContext *context) = 0;
+    virtual antlrcpp::Any visitInit_stmt_no_const(ifccParser::Init_stmt_no_constContext *context) = 0;
 
-    virtual std::any visitReturnConst(ifccParser::ReturnConstContext *context) = 0;
+    virtual antlrcpp::Any visitAssign_stmt_var(ifccParser::Assign_stmt_varContext *context) = 0;
 
-    virtual std::any visitReturnVar(ifccParser::ReturnVarContext *context) = 0;
+    virtual antlrcpp::Any visitAssign_stmt_const(ifccParser::Assign_stmt_constContext *context) = 0;
 
 
 };
