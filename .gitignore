@@ -1,14 +1,123 @@
-antlr/
-.antlr/
+# ============================================
+# Fichiers de configuration locale
+# ============================================
 compiler/config.mk
 
-compiler/build/
+# ============================================
+# Fichiers de build et binaires
+# ============================================
+# Exécutables
 compiler/ifcc
-
-ifcc-test-output/
+ifcc
+*.exe
+*.out
 ret42
-ret42.o
+
+# Fichiers objets
+*.o
+*.obj
+
+# Fichiers assembleur générés
+*.s
 ret42.s
 
+# Bibliothèques
+*.so
+*.so.*
+*.dylib
+*.dll
+*.a
+*.lib
+
+# Fichiers de dépendances
+*.d
+
+# ============================================
+# Répertoires de build
+# ============================================
+build/
+compiler/build/
+**/build/
+
+# ============================================
+# Fichiers générés par ANTLR
+# ============================================
+generated/
 compiler/generated/
-/DS_Store
+antlr/
+
+# ============================================
+# Sorties des tests
+# ============================================
+ifcc-test-output/
+
+# ============================================
+# IDEs et éditeurs
+# ============================================
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# IntelliJ IDEA / CLion
+.idea/
+*.iml
+*.iws
+cmake-build-*/
+
+# Eclipse
+.cproject
+.project
+.settings/
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+\#*\#
+.\#*
+
+# ============================================
+# Fichiers système
+# ============================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================
+# Fichiers temporaires et logs
+# ============================================
+*.tmp
+*.temp
+*.log
+*.bak
+*.cache
+
+# ============================================
+# Fichiers de test générés
+# ============================================
+*.test.c
+*.test.s
+test_output/
+
+# ============================================
+# Core dumps et debug
+# ============================================
+core
+core.*
+vgcore.*
+*.dSYM/
