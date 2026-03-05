@@ -14,14 +14,10 @@ class CodeGenVisitor : public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
 
-        virtual antlrcpp::Any visitDeclList(ifccParser::DeclListContext *ctx) override;
-        virtual antlrcpp::Any visitDeclItemVoid(ifccParser::DeclItemVoidContext *ctx) override;
-        virtual antlrcpp::Any visitDeclItemConst(ifccParser::DeclItemConstContext *ctx) override;
-        virtual antlrcpp::Any visitDeclItemVar(ifccParser::DeclItemVarContext *ctx) override;
+        virtual antlrcpp::Any visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) override;
+        virtual antlrcpp::Any visitDecl_item(ifccParser::Decl_itemContext *ctx) override;
 
-        virtual antlrcpp::Any visitAffectConst(ifccParser::AffectConstContext *ctx) override;
-        virtual antlrcpp::Any visitAffectVar(ifccParser::AffectVarContext *ctx) override;
+        virtual antlrcpp::Any visitAffect_stmt(ifccParser::Affect_stmtContext *ctx) override;
 
-        virtual antlrcpp::Any visitReturnConst(ifccParser::ReturnConstContext *ctx) override;
-        virtual antlrcpp::Any visitReturnVar(ifccParser::ReturnVarContext *ctx) override;
+        virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
 };
