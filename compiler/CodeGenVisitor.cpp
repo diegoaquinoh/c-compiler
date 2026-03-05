@@ -88,52 +88,52 @@ antlrcpp::Any CodeGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *c
 }
 
 
-blabla jeMultiplie(ifccParser::Return_stmtContext *ctx)
-{
-    if (ctx->expr(0)->CONST()) {
-        if(ctx->expr(1)->CONST()) {
-            int val1 = stoi(ctx->expr(0)->CONST()->getText());
-            int val2 = stoi(ctx->expr(1)->CONST()->getText());
-            int result = val1 * val2;
-            cout << "    movl $" << result << ", %eax\n";
-            return 0;
-        }
-        if(ctx->expr(1)->VAR()) {
-            int val1 = stoi(ctx->expr(0)->CONST()->getText());
-            int offset2 = symbolTable[ctx->expr(1)->VAR()->getText()];
-            cout << "    movl " << offset2 << "(%rbp), %ebx\n";
-            cout << "    imull %ebx, $" << val1 << "\n";
-            cout << "    movl %eax, %eax\n"; // Move result to %eax
-            return 0;
-        }
-    }
-    else if(ctx->expr(0)->VAR()) {
-        if(ctx->expr(1)->CONST()) {
-            int offset1 = symbolTable[ctx->expr(0)->VAR()->getText()];
-            int val2 = stoi(ctx->expr(1)->CONST()->getText());
-            cout << "    movl " << offset1 << "(%rbp), %ebx\n";
-            cout << "    imull $" << val2 << ", %ebx\n";
-            cout << "    movl %ebx, %eax\n"; // Move result to %eax
-            return 0;
-        }
-        if(ctx->expr(1)->VAR()) {
-            int offset1 = symbolTable[ctx->expr(0)->VAR()->getText()];
-            int offset2 = symbolTable[ctx->expr(1)->VAR()->getText()];
-            cout << "    movl " << offset1 << "(%rbp), %ebx\n";
-            cout << "    movl " << offset2 << "(%rbp), %ecx\n";
-            cout << "    imull %ecx, %ebx\n";
-            cout << "    movl %ebx, %eax\n"; // Move result to %eax
-            return 0;
-        }
-    }
+// blabla jeMultiplie(ifccParser::Return_stmtContext *ctx)
+// {
+//     if (ctx->expr(0)->CONST()) {
+//         if(ctx->expr(1)->CONST()) {
+//             int val1 = stoi(ctx->expr(0)->CONST()->getText());
+//             int val2 = stoi(ctx->expr(1)->CONST()->getText());
+//             int result = val1 * val2;
+//             cout << "    movl $" << result << ", %eax\n";
+//             return 0;
+//         }
+//         if(ctx->expr(1)->VAR()) {
+//             int val1 = stoi(ctx->expr(0)->CONST()->getText());
+//             int offset2 = symbolTable[ctx->expr(1)->VAR()->getText()];
+//             cout << "    movl " << offset2 << "(%rbp), %ebx\n";
+//             cout << "    imull %ebx, $" << val1 << "\n";
+//             cout << "    movl %eax, %eax\n"; // Move result to %eax
+//             return 0;
+//         }
+//     }
+//     else if(ctx->expr(0)->VAR()) {
+//         if(ctx->expr(1)->CONST()) {
+//             int offset1 = symbolTable[ctx->expr(0)->VAR()->getText()];
+//             int val2 = stoi(ctx->expr(1)->CONST()->getText());
+//             cout << "    movl " << offset1 << "(%rbp), %ebx\n";
+//             cout << "    imull $" << val2 << ", %ebx\n";
+//             cout << "    movl %ebx, %eax\n"; // Move result to %eax
+//             return 0;
+//         }
+//         if(ctx->expr(1)->VAR()) {
+//             int offset1 = symbolTable[ctx->expr(0)->VAR()->getText()];
+//             int offset2 = symbolTable[ctx->expr(1)->VAR()->getText()];
+//             cout << "    movl " << offset1 << "(%rbp), %ebx\n";
+//             cout << "    movl " << offset2 << "(%rbp), %ecx\n";
+//             cout << "    imull %ecx, %ebx\n";
+//             cout << "    movl %ebx, %eax\n"; // Move result to %eax
+//             return 0;
+//         }
+//     }
 
 
-    if (ctx->expr()->CONST()) {
-        int val = stoi(ctx->expr()->CONST()->getText());
-        cout << "    movl $" << val << ", %eax\n";
-    } else {
-        int offset = symbolTable[ctx->expr()->VAR()->getText()];
-        cout << "    movl " << offset << "(%rbp), %eax\n";
-    }
-    return 0;
-}
+//     if (ctx->expr()->CONST()) {
+//         int val = stoi(ctx->expr()->CONST()->getText());
+//         cout << "    movl $" << val << ", %eax\n";
+//     } else {
+//         int offset = symbolTable[ctx->expr()->VAR()->getText()];
+//         cout << "    movl " << offset << "(%rbp), %eax\n";
+//     }
+//     return 0;
+// }

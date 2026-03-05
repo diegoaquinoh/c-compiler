@@ -18,7 +18,7 @@ expr : '-' expr                # negative
      | expr OP=('*'|'/') expr  # mult
      | expr OP=('+'|'-') expr  # addsub
      | '(' expr ')'            # parens
-     | CONST                   # const
+     | CONST                   # CONST
      | VAR                     # var
      ;
 
