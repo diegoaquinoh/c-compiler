@@ -45,9 +45,10 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *c
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx) {
-    declareVar(ctx->IDENT()->getText());
-    if (ctx->expr() && ctx->expr()->IDENT()) {
-        useVar(ctx->expr()->IDENT()->getText());
+    declareVar(ctx->VAR()->getText());
+    if (ctx->expr()) {
+        //useVar(ctx->expr()->VAR()->getText());
+        this->visit(ctx->expr());
     }
     return 0;
 }
@@ -84,16 +85,18 @@ antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx
 }
 
 antlrcpp::Any SymbolTableVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx) {
-    useVar(ctx->IDENT()->getText());
-    if (ctx->expr()->IDENT()) {
-        useVar(ctx->expr()->IDENT()->getText());
+    useVar(ctx->VAR()->getText());
+    if (ctx->expr()) {
+        //useVar(ctx->expr()->VAR()->getText());
+        this->visit(ctx->expr());
     }
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
-    if (ctx->expr()->IDENT()) {
-        useVar(ctx->expr()->IDENT()->getText());
+    if (ctx->expr()) {
+        //useVar(ctx->expr()->VAR()->getText());
+        this->visit(ctx->expr());
     }
     return 0;
 }

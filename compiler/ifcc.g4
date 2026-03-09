@@ -13,15 +13,16 @@ affect_stmt: IDENT '=' expr ';' ;
 
 return_stmt : RETURN expr ';' ;
 
-expr_stmt : expr ';' ;
-
-expr : '-' expr                          # negative
-     | expr OP=('*'|'/') expr            # mult
-     | expr OP=('+'|'-') expr            # addsub
-     | IDENT '(' (expr (',' expr)*)? ')' # funcCall
-     | '(' expr ')'                      # parens
-     | CONST                             # CONST
-     | IDENT                             # var
+expr : IDENT '(' (expr (',' expr)*)? ')' # funcCall
+     | '-' expr                # negative
+     | expr OP=('*'|'/') expr  # multdiv
+     | expr OP=('+'|'-') expr  # addsub
+     | expr '&' expr           # bitwiseand
+     | expr '^' expr           # bitwisexor
+     | expr '|' expr           # bitwiseor
+     | '(' expr ')'            # parens
+     | CONST                   # const
+     | IDENT                     # var
      ;
 
 RETURN : 'return' ;

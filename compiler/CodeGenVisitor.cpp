@@ -49,15 +49,10 @@ antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
     int offset = symbolTable[varName];
 
     if (ctx->expr()) {
-        if (ctx->expr()->CONST()) {
-            int val = stoi(ctx->expr()->CONST()->getText());
-            cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
-        } else {
-            int offsetSrc = symbolTable[ctx->expr()->IDENT()->getText()];
-            cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-            cout << "    movl %eax, " << offset << "(%rbp)\n";
-        }
+        this->visit(ctx->expr());
+        cout << "    movl %eax, " << offset << "(%rbp)\n";
     }
+
     return 0;
 }
 
@@ -66,25 +61,125 @@ antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *c
     string varName = ctx->IDENT()->getText();
     int offset = symbolTable[varName];
 
-    if (ctx->expr()->CONST()) {
-        int val = stoi(ctx->expr()->CONST()->getText());
-        cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
-    } else {
-        int offsetSrc = symbolTable[ctx->expr()->IDENT()->getText()];
-        cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-        cout << "    movl %eax, " << offset << "(%rbp)\n";
-    }
+    this->visit(ctx->expr());
+    cout << "    movl %eax, " << offset << "(%rbp)\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
+{
+    int val = stoi(ctx->CONST()->getText());
+    cout << "    movl $" << val << ", %eax\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitVar(ifccParser::VarContext *ctx)
+{
+    int offsetSrc = symbolTable[ctx->VAR()->getText()];
+    cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
-    if (ctx->expr()->CONST()) {
-        int val = stoi(ctx->expr()->CONST()->getText());
-        cout << "    movl $" << val << ", %eax\n";
+    this->visit(ctx->expr());
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
+{
+    auto op = ctx->OP->getText();
+    this->visit(ctx->expr(0));
+
+    std::cout << "    pushq %rax\n";
+    
+    this->visit(ctx->expr(1));
+
+    if (op == "*") {
+        std::cout << "    imull (%rsp), %eax\n";
+
+        std::cout << "    addq $8, %rsp\n";
     } else {
-        int offset = symbolTable[ctx->expr()->IDENT()->getText()];
-        cout << "    movl " << offset << "(%rbp), %eax\n";
+ 
+        // On met la DROITE (numérateur) dans %ecx
+        std::cout << "    movl %eax, %ecx\n";
+        
+        // On récupère la GAUCHE (dénominateur) dans %eax
+        std::cout << "    popq %rax\n";
+
+        // Extension de signe (Obligatoire pour idivl)
+        // Étend le signe de %eax vers %edx pour former le nombre 64 bits %edx:%eax
+        std::cout << "    cltd\n";
+
+        // % eax =  (%edx:%eax) / %ecx
+        std::cout << "    idivl %ecx\n";
     }
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
+{  
+    auto op = ctx->OP->getText();
+    this->visit(ctx->expr(0));
+
+    std::cout << "    pushq %rax\n";
+    
+    this->visit(ctx->expr(1));
+
+    if (op == "+") {
+        std::cout << "    addl (%rsp), %eax\n";
+    } else {
+        std::cout << "    subl (%rsp), %eax\n";
+    }
+
+    std::cout << "    addq $8, %rsp\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitNegative(ifccParser::NegativeContext *ctx){
+    this->visit(ctx->expr());
+    std::cout << "    negl %eax\n";
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
+    this->visit(ctx->expr(0));
+    std::cout << "    pushq %rax\n";
+    
+    this->visit(ctx->expr(1));
+
+    std::cout << "    andl (%rsp), %eax\n";
+    std::cout << "    addq $8, %rsp\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
+    this->visit(ctx->expr(0));
+    std::cout << "    pushq %rax\n";
+    
+    this->visit(ctx->expr(1));
+
+    std::cout << "    xorl (%rsp), %eax\n";
+    std::cout << "    addq $8, %rsp\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
+    this->visit(ctx->expr(0));
+    std::cout << "    pushq %rax\n";
+    
+    this->visit(ctx->expr(1));
+
+    std::cout << "    orl (%rsp), %eax\n";
+    std::cout << "    addq $8, %rsp\n";
+
     return 0;
 }
