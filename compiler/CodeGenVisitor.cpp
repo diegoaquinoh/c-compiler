@@ -77,7 +77,7 @@ antlrcpp::Any CodeGenVisitor::visitConst(ifccParser::ConstContext *ctx)
 
 antlrcpp::Any CodeGenVisitor::visitVar(ifccParser::VarContext *ctx)
 {
-    int offsetSrc = symbolTable[ctx->VAR()->getText()];
+    int offsetSrc = symbolTable[ctx-->IDENT()->getText()];
     cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
 
     return 0;
