@@ -102,24 +102,20 @@ antlrcpp::Any CodeGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
 
         std::cout << "    addq $8, %rsp\n";
     } else {
-        std::cout << "    pushq %rax\n";
+ 
+        // On met la DROITE (numérateur) dans %ecx
+        std::cout << "    movl %eax, %ecx\n";
+        
+        // On récupère la GAUCHE (dénominateur) dans %eax
+        std::cout << "    popq %rax\n";
 
-        //std::cout << "divl (%rsp), %eax\n";
+        // Extension de signe (Obligatoire pour idivl)
+        // Étend le signe de %eax vers %edx pour former le nombre 64 bits %edx:%eax
+        std::cout << "    cltd\n";
 
-        // On récupère la DROITE (diviseur) dans %ecx (temporaire technique)
-    cout << "    popq %rcx\n"; 
-    
-    // On récupère la GAUCHE (dividende) dans %eax
-    cout << "    popq %rax\n";
-
-    // 4. Extension de signe (Obligatoire pour idivl)
-    // Étend le signe de %eax vers %edx pour former le nombre 64 bits %edx:%eax
-    cout << "    cltd\n";
-
-    // 5. Division : (%edx:%eax) / %ecx
-    cout << "    idivl %ecx\n";
+        // % eax =  (%edx:%eax) / %ecx
+        std::cout << "    idivl %ecx\n";
     }
-    
 
     return 0;
 }
