@@ -58,6 +58,7 @@ antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *c
 {
     string varName = ctx->VAR()->getText();
     int offset = symbolTable[varName];
+<<<<<<< HEAD
 
     this->visit(ctx->expr());
     cout << "    movl %eax, " << offset << "(%rbp)\n";
@@ -78,6 +79,17 @@ antlrcpp::Any CodeGenVisitor::visitVar(ifccParser::VarContext *ctx)
     int offsetSrc = symbolTable[ctx->VAR()->getText()];
     cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
 
+=======
+    
+    if (ctx->expr()) {
+        int val = stoi(ctx->expr()->CONST()->getText());
+        cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
+    } else {
+        int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
+        cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+        cout << "    movl %eax, " << offset << "(%rbp)\n";
+    }
+>>>>>>> f52e913fffb2fd173f23268ffefa870e7ce66893
     return 0;
 }
 
