@@ -1,3 +1,4 @@
-int main() {
-    return 10 - 5;
+int main(){
+    int a = b;
+    return 0;
 }
