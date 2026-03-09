@@ -1,6 +1,21 @@
 #include "CodeGenVisitor.h"
 using namespace std;
 
+int CodeGenVisitor::createVariableTmp()
+{
+    this->indexVariables -= 4;
+    std::cout << "movl %eax, " << this->indexVariables << "(%rbp)\n";
+
+    // Si à l'avenir il faut les nommer...
+    // std::string name = "tmp" + std::to_string(this->cptVariables);
+
+    // this->symbolTable[name] = this->indexVariables;
+
+    // this->cptVariables++;  
+
+    return this->indexVariables;
+}
+
 antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
     #ifdef __APPLE__
@@ -14,6 +29,10 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Prologue
     cout << "    pushq %rbp\n";
     cout << "    movq %rsp, %rbp\n";
+
+    // On change la valeur du pointeur de pile pour réserver le partie du dessous aux variables et ne pas les écraser
+    int stackSize = symbolTable.size() * 4 + 4;
+    this->indexVariables = - stackSize ;
 
     // Initialize implicit return value slot at -4(%rbp)
     cout << "    movl $0, -4(%rbp)\n";
@@ -47,15 +66,10 @@ antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
     int offset = symbolTable[varName];
 
     if (ctx->expr()) {
-        if (ctx->expr()->CONST()) {
-            int val = stoi(ctx->expr()->CONST()->getText());
-            cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
-        } else {
-            int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
-            cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-            cout << "    movl %eax, " << offset << "(%rbp)\n";
-        }
+        this->visit(ctx->expr());
+        cout << "    movl %eax, " << offset << "(%rbp)\n";
     }
+
     return 0;
 }
 
@@ -64,25 +78,125 @@ antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *c
     string varName = ctx->VAR()->getText();
     int offset = symbolTable[varName];
 
-    if (ctx->expr()->CONST()) {
-        int val = stoi(ctx->expr()->CONST()->getText());
-        cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
-    } else {
-        int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
-        cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-        cout << "    movl %eax, " << offset << "(%rbp)\n";
-    }
+    this->visit(ctx->expr());
+    cout << "    movl %eax, " << offset << "(%rbp)\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
+{
+    int val = stoi(ctx->CONST()->getText());
+    cout << "    movl $" << val << ", %eax\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitVar(ifccParser::VarContext *ctx)
+{
+    int offsetSrc = symbolTable[ctx->VAR()->getText()];
+    cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
-    if (ctx->expr()->CONST()) {
-        int val = stoi(ctx->expr()->CONST()->getText());
-        cout << "    movl $" << val << ", %eax\n";
+    this->visit(ctx->expr());
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
+{
+    auto op = ctx->OP->getText();
+    this->visit(ctx->expr(0));
+
+    auto indexTmp = createVariableTmp();
+    
+    this->visit(ctx->expr(1));
+
+    if (op == "*") {
+        std::cout << "    imull " << indexTmp << "(%rbp), %eax\n";
     } else {
-        int offset = symbolTable[ctx->expr()->VAR()->getText()];
-        cout << "    movl " << offset << "(%rbp), %eax\n";
+ 
+        // On met la DROITE (numérateur) dans %ecx
+        std::cout << "    movl %eax, %ecx\n";
+        
+        // On met la GAUCHE (dénominateur) dans %eax
+        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n";
+
+        // Extension de signe (Obligatoire pour idivl)
+        // Étend le signe de %eax vers %edx pour former le nombre 64 bits %edx:%eax
+        std::cout << "    cltd\n";
+
+        // % eax =  (%edx:%eax) / %ecx
+        std::cout << "    idivl %ecx\n";
     }
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
+{  
+    auto op = ctx->OP->getText();
+    this->visit(ctx->expr(0));
+
+    int indexTmp = createVariableTmp();
+    
+    this->visit(ctx->expr(1));
+
+    if (op == "+") {
+        std::cout << "    addl " << indexTmp << "(%rbp), %eax\n";
+    } else {
+        std::cout << "    movl %eax, %ecx\n";      // expr(1) dans %ecx
+        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n"; // expr(0) dans %eax
+        std::cout << "    subl %ecx, %eax\n";      // %ecx = expr(0) - expr(1)
+    }
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitNegative(ifccParser::NegativeContext *ctx){
+    this->visit(ctx->expr());
+    std::cout << "    negl %eax\n";
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitParens(ifccParser::ParensContext *ctx){
+    this->visit(ctx->expr());
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
+    this->visit(ctx->expr(0));
+    int indexTmp = createVariableTmp();
+    
+    this->visit(ctx->expr(1));
+
+    std::cout << "    andl " << indexTmp << "(%rbp), %eax\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
+    this->visit(ctx->expr(0));
+    int indexTmp = createVariableTmp();
+    
+    this->visit(ctx->expr(1));
+
+    std::cout << "    xorl " << indexTmp << "(%rbp), %eax\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
+    this->visit(ctx->expr(0));
+    int indexTmp = createVariableTmp();
+    
+    this->visit(ctx->expr(1));
+
+    std::cout << "    orl " << indexTmp << "(%rbp), %eax\n";
+
     return 0;
 }

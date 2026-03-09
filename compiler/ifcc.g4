@@ -13,7 +13,18 @@ affect_stmt: VAR '=' expr ';' ;
 
 return_stmt : RETURN expr ';' ;
 
-expr: CONST | VAR ;
+
+expr : '(' expr ')'            # parens
+     |'-' expr                 # negative
+     | expr OP=('*'|'/') expr  # multdiv
+     | expr OP=('+'|'-') expr  # addsub
+     | expr '&' expr           # bitwiseand
+     | expr '^' expr           # bitwisexor
+     | expr '|' expr           # bitwiseor
+     | CONST                   # const
+     | VAR                     # var
+     ;
+
 
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
