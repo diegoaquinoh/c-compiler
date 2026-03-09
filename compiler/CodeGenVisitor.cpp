@@ -63,8 +63,8 @@ antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *c
 {
     string varName = ctx->VAR()->getText();
     int offset = symbolTable[varName];
-
-    if (ctx->expr()->CONST()) {
+    
+    if (ctx->expr()) {
         int val = stoi(ctx->expr()->CONST()->getText());
         cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
     } else {

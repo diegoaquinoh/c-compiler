@@ -16,6 +16,6 @@ int main() {
     3 + a * 2;
     2 + 2 * a;
 
-    3 * b * f + 4 +3 * c * e + d * 9;
+    return3 * b * f + 4 +3 * c * e + d * 9;
     
 }
