@@ -47,15 +47,10 @@ antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
     int offset = symbolTable[varName];
 
     if (ctx->expr()) {
-        if (ctx->expr()->CONST()) {
-            int val = stoi(ctx->expr()->CONST()->getText());
-            cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
-        } else {
-            int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
-            cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-            cout << "    movl %eax, " << offset << "(%rbp)\n";
-        }
+        this->visit(ctx->expr());
+        cout << "    movl %eax, " << offset << "(%rbp)\n";
     }
+
     return 0;
 }
 
@@ -64,26 +59,88 @@ antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *c
     string varName = ctx->VAR()->getText();
     int offset = symbolTable[varName];
 
-    if (ctx->expr()->CONST()) {
-        int val = stoi(ctx->expr()->CONST()->getText());
-        cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
-    } else {
-        int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
-        cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
-        cout << "    movl %eax, " << offset << "(%rbp)\n";
-    }
+    this->visit(ctx->expr());
+    cout << "    movl %eax, " << offset << "(%rbp)\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitCONST(ifccParser::CONSTContext *ctx) 
+{
+    int val = stoi(ctx->CONST()->getText());
+    cout << "    movl $" << val << ", %eax\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitVar(ifccParser::VarContext *ctx)
+{
+    int offsetSrc = symbolTable[ctx->VAR()->getText()];
+    cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+
     return 0;
 }
 
 antlrcpp::Any CodeGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
-    if (ctx->expr()->CONST()) {
-        int val = stoi(ctx->expr()->CONST()->getText());
-        cout << "    movl $" << val << ", %eax\n";
+    this->visit(ctx->expr());
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
+{
+    auto op = ctx->OP->getText();
+    this->visit(ctx->expr(0));
+
+    std::cout << "    pushq %rax\n";
+    
+    this->visit(ctx->expr(1));
+
+    if (op == "*") {
+        std::cout << "    imull (%rsp), %eax\n";
+
+        std::cout << "    addq $8, %rsp\n";
     } else {
-        int offset = symbolTable[ctx->expr()->VAR()->getText()];
-        cout << "    movl " << offset << "(%rbp), %eax\n";
+        std::cout << "    pushq %rax\n";
+
+        //std::cout << "divl (%rsp), %eax\n";
+
+        // On récupère la DROITE (diviseur) dans %ecx (temporaire technique)
+    cout << "    popq %rcx\n"; 
+    
+    // On récupère la GAUCHE (dividende) dans %eax
+    cout << "    popq %rax\n";
+
+    // 4. Extension de signe (Obligatoire pour idivl)
+    // Étend le signe de %eax vers %edx pour former le nombre 64 bits %edx:%eax
+    cout << "    cltd\n";
+
+    // 5. Division : (%edx:%eax) / %ecx
+    cout << "    idivl %ecx\n";
     }
+    
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
+{  
+    auto op = ctx->OP->getText();
+    this->visit(ctx->expr(0));
+
+    std::cout << "    pushq %rax\n";
+    
+    this->visit(ctx->expr(1));
+
+    if (op == "+") {
+        std::cout << "    addl (%rsp), %eax\n";
+    } else {
+        std::cout << "    subl (%rsp), %eax\n";
+    }
+
+    std::cout << "    addq $8, %rsp\n";
+
     return 0;
 }
 

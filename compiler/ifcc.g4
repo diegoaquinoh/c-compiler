@@ -15,7 +15,7 @@ return_stmt : RETURN expr ';' ;
 
 
 expr : '-' expr                # negative
-     | expr OP=('*'|'/') expr  # mult
+     | expr OP=('*'|'/') expr  # multdiv
      | expr OP=('+'|'-') expr  # addsub
      | '(' expr ')'            # parens
      | CONST                   # CONST
