@@ -9,8 +9,7 @@ using namespace std;
 
 class CodeGenVisitor : public ifccBaseVisitor {
 	public:
-        map<string, int> symbolTable;
-        CodeGenVisitor(const map<string, int> &symTable) : symbolTable(symTable) {}
+        CodeGenVisitor(const map<string, int> &symTable, bool hasRet, bool hasFunc) : symbolTable(symTable), hasReturn(hasRet), hasFuncCall(hasFunc) {}
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
 
@@ -19,5 +18,14 @@ class CodeGenVisitor : public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitAffect_stmt(ifccParser::Affect_stmtContext *ctx) override;
 
+        virtual antlrcpp::Any visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) override;
+
+        virtual antlrcpp::Any visitFuncCall(ifccParser::FuncCallContext *ctx) override;
+
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
+
+        private:
+            map<string, int> symbolTable;
+            bool hasReturn;
+            bool hasFuncCall;
 };

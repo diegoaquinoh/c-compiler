@@ -11,14 +11,22 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     cout << "main:\n";
     #endif
 
-    // Prologue
+    /************* 
+    ***Prologue***
+    **************/
     cout << "    pushq %rbp\n";
     cout << "    movq %rsp, %rbp\n";
 
-    // Initialize implicit return value slot at -4(%rbp)
-    cout << "    movl $0, -4(%rbp)\n";
+    // Allocation of rsp
+    if (hasFuncCall) {
+        int stackBytes = symbolTable.size() * 4;
+        int stackSize = ((stackBytes + 15) / 16) * 16;
+        cout << "    subq $" << stackSize << ", %rsp\n";
+    }
 
-    // Visit all statements
+    /******************
+    Visit all statements
+    *******************/
     for (auto *stmt : ctx->stmt()) {
         this->visit(stmt);
     }
@@ -26,7 +34,15 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Visit return statement
     this->visit(ctx->return_stmt());
 
-    // Epilogue
+    /*********
+    *Epilogue* 
+    **********/
+    if (hasFuncCall) {
+        cout << "    addq $" << stackSize << ", %rsp\n";
+    }
+    if (!hasReturn) {
+        cout << "    movl $0, %eax\n";
+    }
     cout << "    popq %rbp\n";
     cout << "    retq\n";
 
@@ -72,6 +88,39 @@ antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *c
         cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
         cout << "    movl %eax, " << offset << "(%rbp)\n";
     }
+    return 0;
+}
+
+atlrcpp::Any CodeGenVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx)
+{
+    visit(ctx->expr());
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx)
+{
+    string funcName = ctx->IDENT()->getText();
+    vector<string> args = {'%edi', '%esi', '%edx', '%ecx', '%r8d', '%r9d'};
+    for (int i = 0; i < 6; i++) {
+        if (ctx->expr(i)) {
+            if (ctx->expr(i)->CONST()) {
+                int val = stoi(ctx->expr(i)->CONST()->getText());
+                cout << "    movl $" << val << ", " << args[i] << "\n";
+            } else {
+                int offsetSrc = symbolTable[ctx->expr(i)->VAR()->getText()];
+                cout << "    movl " << offsetSrc << "(%rbp), " << args[i] << "\n";
+            }
+        }
+    }
+
+    #ifdef __APPLE__
+    cout << "    callq _" << funcName << "\n";
+    #else
+    cout << "    callq " << funcName << "\n";
+    #endif
+
+
+    
     return 0;
 }
 

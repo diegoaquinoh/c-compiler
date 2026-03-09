@@ -1,3 +1,4 @@
 int main() {
-   return 42;
+   int z = 'a';
+   return z;
 }

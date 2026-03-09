@@ -58,7 +58,7 @@ int main(int argn, const char **argv)
   }
 
   // Second Visitor: generate code using the symbol table
-  CodeGenVisitor v(stv.getSymbolTable());
+  CodeGenVisitor v(stv.getSymbolTable(), stv.getHasReturn(), stv.getHasFuncCall());
   v.visit(tree);
 
   return 0;

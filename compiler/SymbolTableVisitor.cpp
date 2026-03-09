@@ -45,24 +45,54 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *c
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx) {
-    declareVar(ctx->VAR()->getText());
-    if (ctx->expr() && ctx->expr()->VAR()) {
-        useVar(ctx->expr()->VAR()->getText());
+    declareVar(ctx->IDENT()->getText());
+    if (ctx->expr() && ctx->expr()->IDENT()) {
+        useVar(ctx->expr()->IDENT()->getText());
     }
     return 0;
 }
 
+antlrcpp::Any SymbolTableVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) {
+    visit(ctx->expr());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
+    hasFuncCall = true;
+    string funcName = ctx->IDENT()->getText();
+    if (!knownFunctions.count(funcName)) {
+        cerr << "error: function '" << funcName << "' called but not declared\n";
+        errorFlag = true;
+    }
+    int argCount = ctx->expr().size();
+    if (argCount > 6) {
+        cerr << "error: function '" << funcName << "' called with too many arguments (" << argCount << ")\n";
+        errorFlag = true;
+    } else if (knownFunctions.count(funcName) && argCount != knownFunctions[funcName]) {
+        cerr << "error: '" << funcName << "' expects " << knownFunctions[funcName]
+             << " arguments, got " << argCount << "\n";
+        errorFlag = true;
+    }
+
+    for (auto *arg : ctx->expr()) {
+        this->visit(arg);
+    }
+
+    return 0;
+}
+
 antlrcpp::Any SymbolTableVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx) {
-    useVar(ctx->VAR()->getText());
-    if (ctx->expr()->VAR()) {
-        useVar(ctx->expr()->VAR()->getText());
+    useVar(ctx->IDENT()->getText());
+    if (ctx->expr()->IDENT()) {
+        useVar(ctx->expr()->IDENT()->getText());
     }
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
-    if (ctx->expr()->VAR()) {
-        useVar(ctx->expr()->VAR()->getText());
+    hasReturn = true;
+    if (ctx->expr()->IDENT()) {
+        useVar(ctx->expr()->IDENT()->getText());
     }
     return 0;
 }
