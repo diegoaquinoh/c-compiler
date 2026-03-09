@@ -12,6 +12,8 @@ class CodeGenVisitor : public ifccBaseVisitor {
         map<string, int> symbolTable;
         CodeGenVisitor(const map<string, int> &symTable) : symbolTable(symTable) {}
 
+        virtual int createVariableTmp();
+
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
 
         // Statement visitors
@@ -35,4 +37,8 @@ class CodeGenVisitor : public ifccBaseVisitor {
 
         // Return statement visitor
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
+
+        private:
+                int cptVariables = 0;
+                int indexVariables;
 };
