@@ -6,16 +6,6 @@ int main() {
     int e = 5;
     int f = 6; 
 
-    a * 2;
-    2 * a;
-
-
-    a * 2 + 4;
-    2 * a + 7;
-
-    3 + a * 2;
-    2 + 2 * a;
-
     return3 * b * f + 4 +3 * c * e + d * 9;
     
 }
