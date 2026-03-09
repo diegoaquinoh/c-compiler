@@ -43,7 +43,7 @@ antlrcpp::Any CodeGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 
 antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
-    string varName = ctx->VAR()->getText();
+    string varName = ctx->IDENT()->getText();
     int offset = symbolTable[varName];
 
     if (ctx->expr()) {
@@ -51,7 +51,7 @@ antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
             int val = stoi(ctx->expr()->CONST()->getText());
             cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
         } else {
-            int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
+            int offsetSrc = symbolTable[ctx->expr()->IDENT()->getText()];
             cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
             cout << "    movl %eax, " << offset << "(%rbp)\n";
         }
@@ -61,14 +61,14 @@ antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 
 antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx)
 {
-    string varName = ctx->VAR()->getText();
+    string varName = ctx->IDENT()->getText();
     int offset = symbolTable[varName];
 
     if (ctx->expr()->CONST()) {
         int val = stoi(ctx->expr()->CONST()->getText());
         cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
     } else {
-        int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
+        int offsetSrc = symbolTable[ctx->expr()->IDENT()->getText()];
         cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
         cout << "    movl %eax, " << offset << "(%rbp)\n";
     }
@@ -81,7 +81,7 @@ antlrcpp::Any CodeGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *c
         int val = stoi(ctx->expr()->CONST()->getText());
         cout << "    movl $" << val << ", %eax\n";
     } else {
-        int offset = symbolTable[ctx->expr()->VAR()->getText()];
+        int offset = symbolTable[ctx->expr()->IDENT()->getText()];
         cout << "    movl " << offset << "(%rbp), %eax\n";
     }
     return 0;
