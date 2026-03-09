@@ -18,9 +18,9 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     cout << "    movq %rsp, %rbp\n";
 
     // Allocation of rsp
+    int stackBytes = symbolTable.size() * 4;
+    int stackSize = ((stackBytes + 15) / 16) * 16;
     if (hasFuncCall) {
-        int stackBytes = symbolTable.size() * 4;
-        int stackSize = ((stackBytes + 15) / 16) * 16;
         cout << "    subq $" << stackSize << ", %rsp\n";
     }
 
@@ -59,7 +59,7 @@ antlrcpp::Any CodeGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 
 antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
-    string varName = ctx->VAR()->getText();
+    string varName = ctx->IDENT()->getText();
     int offset = symbolTable[varName];
 
     if (ctx->expr()) {
@@ -67,7 +67,7 @@ antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
             int val = stoi(ctx->expr()->CONST()->getText());
             cout << "    movl $" << val << ", " << offset << "(%rbp)\n";
         } else {
-            int offsetSrc = symbolTable[ctx->expr()->VAR()->getText()];
+            int offsetSrc = symbolTable[ctx->expr()->IDENT()->getText()];
             cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
             cout << "    movl %eax, " << offset << "(%rbp)\n";
         }
@@ -91,7 +91,7 @@ antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *c
     return 0;
 }
 
-atlrcpp::Any CodeGenVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx)
+antlrcpp::Any CodeGenVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx)
 {
     visit(ctx->expr());
     return 0;
@@ -100,7 +100,7 @@ atlrcpp::Any CodeGenVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx)
 antlrcpp::Any CodeGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx)
 {
     string funcName = ctx->IDENT()->getText();
-    vector<string> args = {'%edi', '%esi', '%edx', '%ecx', '%r8d', '%r9d'};
+    vector<string> args = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
     for (int i = 0; i < 6; i++) {
         if (ctx->expr(i)) {
             if (ctx->expr(i)->CONST()) {
