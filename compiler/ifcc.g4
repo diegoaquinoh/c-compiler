@@ -4,7 +4,7 @@ axiom : prog EOF ;
 
 prog : 'int' 'main' '(' ')' '{' stmt* return_stmt '}' ;
 
-stmt : decl_stmt | affect_stmt ;
+stmt : decl_stmt | affect_stmt | expr_stmt ;
 
 decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
 decl_item : IDENT ('=' expr)? ;
@@ -13,6 +13,7 @@ affect_stmt: IDENT '=' expr ';' ;
 
 return_stmt : RETURN expr ';' ;
 
+expr_stmt : expr ';' ;
 
 expr : '-' expr                          # negative
      | expr OP=('*'|'/') expr            # mult
