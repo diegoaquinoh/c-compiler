@@ -52,6 +52,37 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *c
     return 0;
 }
 
+antlrcpp::Any SymbolTableVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) {
+    visit(ctx->expr());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
+    // Validate function name against knownFunctions
+    // Check arg count (putchar=1, getchar=0, max 6 for any function)
+    // Visit each argument expression recursively (for variable usage tracking)
+    string funcName = ctx->IDENT()->getText();
+    if (!knownFunctions.count(funcName)) {
+        cerr << "error: function '" << funcName << "' called but not declared\n";
+        errorFlag = true;
+    }
+    int argCount = ctx->expr().size();
+    if (argCount > 6) {
+        cerr << "error: function '" << funcName << "' called with too many arguments (" << argCount << ")\n";
+        errorFlag = true;
+    } else if (knownFunctions.count(funcName) && argCount != knownFunctions[funcName]) {
+        cerr << "error: '" << funcName << "' expects " << knownFunctions[funcName]
+             << " arguments, got " << argCount << "\n";
+        errorFlag = true;
+    }
+
+    for (auto *arg : ctx->expr()) {
+        this->visit(arg);
+    }
+
+    return 0;
+}
+
 antlrcpp::Any SymbolTableVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx) {
     useVar(ctx->IDENT()->getText());
     if (ctx->expr()->IDENT()) {
