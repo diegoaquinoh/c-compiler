@@ -21,6 +21,19 @@ class SymbolTableVisitor: public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override ;
 
+        
+        virtual antlrcpp::Any visitNegative(ifccParser::NegativeContext *ctx) override;
+        virtual antlrcpp::Any visitParens(ifccParser::ParensContext *ctx) override;
+
+        virtual antlrcpp::Any visitMultdiv(ifccParser::MultdivContext *ctx) override;
+        virtual antlrcpp::Any visitAddsub(ifccParser::AddsubContext *ctx) override;
+
+        virtual antlrcpp::Any visitVar(ifccParser::VarContext *ctx) override;
+
+        virtual antlrcpp::Any visitBitwiseand(ifccParser::BitwiseandContext *ctx) override;
+        virtual antlrcpp::Any visitBitwisexor(ifccParser::BitwisexorContext *ctx) override;
+        virtual antlrcpp::Any visitBitwiseor(ifccParser::BitwiseorContext *ctx) override;
+
         map<string, int> getSymbolTable() const { return symbolTable; }
         bool hasError() const { return errorFlag; }
     private:
