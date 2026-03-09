@@ -65,7 +65,7 @@ antlrcpp::Any CodeGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *c
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitCONST(ifccParser::CONSTContext *ctx) 
+antlrcpp::Any CodeGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
     int val = stoi(ctx->CONST()->getText());
     cout << "    movl $" << val << ", %eax\n";
