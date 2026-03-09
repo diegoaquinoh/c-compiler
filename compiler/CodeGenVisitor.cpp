@@ -163,6 +163,11 @@ antlrcpp::Any CodeGenVisitor::visitNegative(ifccParser::NegativeContext *ctx){
     return 0;
 }
 
+antlrcpp::Any CodeGenVisitor::visitParens(ifccParser::ParensContext *ctx){
+    this->visit(ctx->expr());
+    return 0;
+}
+
 antlrcpp::Any CodeGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
     int indexTmp = createVariableTmp();
@@ -192,7 +197,6 @@ antlrcpp::Any CodeGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
     this->visit(ctx->expr(1));
 
     std::cout << "    orl " << indexTmp << "(%rbp), %eax\n";
-    std::cout << "    addq $8, %rsp\n";
 
     return 0;
 }
