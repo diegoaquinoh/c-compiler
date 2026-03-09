@@ -14,9 +14,10 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Prologue
     cout << "    pushq %rbp\n";
     cout << "    movq %rsp, %rbp\n";
+    cout << "    subq $256, %rsp\n"; // Allocate stack frame (enough for 64 int slots)
 
     // Initialize implicit return value slot at -4(%rbp)
-    cout << "    movl $0, -4(%rbp)\n";
+    // cout << "    movl $0, -4(%rbp)\n";
 
     // Visit all statements
     for (auto *stmt : ctx->stmt()) {
@@ -27,6 +28,7 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     this->visit(ctx->return_stmt());
 
     // Epilogue
+    cout << "    movq %rbp, %rsp\n"; // undo subq regardless of how much stack was used
     cout << "    popq %rbp\n";
     cout << "    retq\n";
 
