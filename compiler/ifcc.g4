@@ -13,6 +13,8 @@ affect_stmt: IDENT '=' expr ';' ;
 
 return_stmt : RETURN expr ';' ;
 
+expr_stmt : expr ';' ;
+
 expr : IDENT '(' (expr (',' expr)*)? ')' # funcCall
      | '-' expr                # negative
      | expr OP=('*'|'/') expr  # multdiv
@@ -21,8 +23,8 @@ expr : IDENT '(' (expr (',' expr)*)? ')' # funcCall
      | expr '^' expr           # bitwisexor
      | expr '|' expr           # bitwiseor
      | '(' expr ')'            # parens
-     | CONST                   # const
-     | IDENT                     # var
+     | CONST                   # CONST
+     | IDENT                   # IDENT
      ;
 
 RETURN : 'return' ;
