@@ -146,6 +146,11 @@ antlrcpp::Any CodeGenVisitor::visitNegative(ifccParser::NegativeContext *ctx){
     return 0;
 }
 
+antlrcpp::Any CodeGenVisitor::visitParens(ifccParser::ParensContext *ctx){
+    this->visit(ctx->expr());
+    return 0;
+}
+
 antlrcpp::Any CodeGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
     std::cout << "    pushq %rax\n";
