@@ -5,14 +5,16 @@
 #include <string>
 #include <iostream>
 #include <initializer_list>
-
+using namespace std;
 // Declarations from the parser -- replace with your own
-#include "type.h"
-#include "symbole.h"
+// #include "symbole.h"
 
 class BasicBlock;
 class CFG;
 class DefFonction;
+class IR;
+
+typedef enum {IntType} Type;
 
 
 //! The class for one 3-address instruction
@@ -46,7 +48,6 @@ class IRInstr {
 	Operation op;
 	Type t;
 	vector<string> params; /**< For 3-op instrs: d, x, y; for ldconst: d, c;  For call: label, d, params;  for wmem and rmem: choose yourself */
-	// if you subclass IRInstr, each IRInstr subclass has its parameters and the previous (very important) comment becomes useless: it would be a better design. 
 };
 
 
@@ -145,5 +146,14 @@ class CFG {
 	vector <BasicBlock*> bbs; /**< all the basic blocks of this CFG*/
 };
 
+
+class IR {
+	public:
+	IR() = default;
+	IR(DefFonction* ast);
+	CFG* cfg; /**< the CFG of this function, which includes the symbol table */
+
+	void gen_asm(ostream& o); /**< x86 assembly code generation for this function */
+};
 
 #endif

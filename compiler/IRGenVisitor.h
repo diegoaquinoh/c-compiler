@@ -2,6 +2,7 @@
 
 #include "antlr4-runtime.h"
 #include "generated/ifccBaseVisitor.h"
+#include "IR.h"
 #include <map>
 #include <string>
 using namespace std;
@@ -42,4 +43,6 @@ class IRGenVisitor : public ifccBaseVisitor {
         private:
                 int cptVariables = 0;
                 int indexVariables;
+                IR ir;
+
 };
