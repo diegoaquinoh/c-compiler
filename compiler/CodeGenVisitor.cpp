@@ -118,6 +118,14 @@ antlrcpp::Any CodeGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
 
     if (op == "*") {
         std::cout << "    imull " << indexTmp << "(%rbp), %eax\n";
+    } else if (op == "%")
+    {
+        std::cout << "    movl %eax, %ecx\n";
+        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n";
+        std::cout << "    cltd\n";
+        std::cout << "    idivl %ecx\n";
+        std::cout << "    movl %edx, %eax\n";
+
     } else {
  
         // On met la DROITE (numérateur) dans %ecx
@@ -197,6 +205,16 @@ antlrcpp::Any CodeGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
     this->visit(ctx->expr(1));
 
     std::cout << "    orl " << indexTmp << "(%rbp), %eax\n";
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx){
+    this->visit(ctx->expr());
+    
+    std::cout<<"    testl %eax, %eax\n";
+    std::cout<<"    sete %al\n";
+    std::cout<<"    movzbl %al, %eax\n";
 
     return 0;
 }
