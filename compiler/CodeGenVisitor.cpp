@@ -200,3 +200,13 @@ antlrcpp::Any CodeGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
 
     return 0;
 }
+
+antlrcpp::Any CodeGenVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx){
+    this->visit(ctx->expr());
+    
+    std::cout<<"    testl %eax, %eax\n";
+    std::cout<<"    sete %al\n";
+    std::cout<<"    movzbl %al, %eax\n";
+
+    return 0;
+}
