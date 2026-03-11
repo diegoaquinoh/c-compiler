@@ -6,13 +6,6 @@ int CodeGenVisitor::createVariableTmp()
     this->indexVariables -= 4;
     std::cout << "movl %eax, " << this->indexVariables << "(%rbp)\n";
 
-    // Si à l'avenir il faut les nommer...
-    // std::string name = "tmp" + std::to_string(this->cptVariables);
-
-    // this->symbolTable[name] = this->indexVariables;
-
-    // this->cptVariables++;  
-
     return this->indexVariables;
 }
 
@@ -151,7 +144,7 @@ antlrcpp::Any CodeGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     } else {
         std::cout << "    movl %eax, %ecx\n";      // expr(1) dans %ecx
         std::cout << "    movl " << indexTmp << "(%rbp), %eax\n"; // expr(0) dans %eax
-        std::cout << "    subl %ecx, %eax\n";      // %ecx = expr(0) - expr(1)
+        std::cout << "    subl %ecx, %eax\n";      // %eax = expr(0) - expr(1)
     }
 
     return 0;
