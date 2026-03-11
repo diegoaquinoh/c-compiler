@@ -118,6 +118,14 @@ antlrcpp::Any CodeGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
 
     if (op == "*") {
         std::cout << "    imull " << indexTmp << "(%rbp), %eax\n";
+    } else if (op == "%")
+    {
+        std::cout << "    movl %eax, %ecx\n";
+        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n";
+        std::cout << "    cltd\n";
+        std::cout << "    idivl %ecx\n";
+        std::cout << "    movl %edx, %eax\n";
+
     } else {
  
         // On met la DROITE (numérateur) dans %ecx
