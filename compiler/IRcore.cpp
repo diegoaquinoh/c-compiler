@@ -45,11 +45,11 @@ string CFG::create_new_tempvar(Type t){
 }
 
 int CFG::get_var_index(string name){
-    return this->SymbolIndex[name];
+    return this->SymbolIndex.at(name);
 }
 
 Type CFG::get_var_type(string name){
-    return this->SymbolType[name];
+    return this->SymbolType.at(name);
 }
 
 string CFG::new_BB_name(){

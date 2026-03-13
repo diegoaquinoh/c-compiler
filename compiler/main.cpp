@@ -73,6 +73,10 @@ int main(int argn, const char **argv)
 
   bb.add_IRInstr(IRInstr::ldconst, IntType, {"var1", "4"});
 
+    bb.add_IRInstr(IRInstr::ldconst, IntType, {"var2", "6"});
+
+      bb.add_IRInstr(IRInstr::add, IntType, {"var3", "var1", "var2"});
+
   bb.gen_x86(std::cout);
 
   
