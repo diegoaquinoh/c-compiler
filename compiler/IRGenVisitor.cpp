@@ -1,6 +1,8 @@
 #include "IRGenVisitor.h"
 using namespace std;
 
+string reg = "!reg";
+
 string IRGenVisitor::createVariableTmp() {
     string tmpName = "!tmp" + to_string(cptTempVariables++);
     int offset = -4 * cptTempVariables;
@@ -37,7 +39,8 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 
     if (ctx->expr()) {
         this->visit(ctx->expr());
-        this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg"});
+        vector<string> v = {varName, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     }
 
     return 0;
@@ -50,7 +53,8 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 
     this->visit(ctx->expr());
 
-    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg"});
+    vector<string> v = {varName, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     return 0;
 }
@@ -60,7 +64,8 @@ antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx)
     int val = stoi(ctx->CONST()->getText());
     string varName = IRGenVisitor::createVariableTmp();
 
-    this->IR->cfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, {varName, "!reg"});
+    vector<string> v = {varName, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
 
     return 0;
 }
@@ -69,7 +74,8 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 {
     string varName = ctx->VAR()->getText();
 
-    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg"});
+    vector<string> v = {varName, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     return 0;
 }
@@ -87,14 +93,17 @@ antlrcpp::Any IRGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
     this->visit(ctx->expr(0));
 
     string indexTmp = createVariableTmp();
-    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {"!reg", indexTmp});
+    vector<string> v = {reg, indexTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     
     this->visit(ctx->expr(1));
     
     if (op == "*") {
-        this->IR->cfg->current_bb->add_IRInstr(IRInstr::mul, IntType, {"!reg", indexTmp, "!reg"});
+        vector<string> v2 = {reg, indexTmp, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, v2);
     } else {
-        this->IR->cfg->current_bb->add_IRInstr(IRInstr::div, IntType, {"!reg", indexTmp, "!reg"});
+        vector<string> v3 = {reg, indexTmp, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::div, IntType, v3);
     }
 
     return 0;
@@ -106,20 +115,23 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     this->visit(ctx->expr(0));
 
     string indexTmp = createVariableTmp();
-    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {"!reg", indexTmp});
+    vector<string> v = {reg, indexTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     
     this->visit(ctx->expr(1));
 
     if (op == "+") {
         std::cout << "    addl " << indexTmp << "(%rbp), %eax\n";
 
-        this->IR->cfg->current_bb->add_IrInstr(IRInstr::add, IntType, {"!reg", varName, varName});
+        vector<string> v2 = {string(reg), indexTmp, string(reg)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, IntType, v2);
     } else {
         std::cout << "    movl %eax, %ecx\n";      // expr(1) dans %ecx
         std::cout << "    movl " << indexTmp << "(%rbp), %eax\n"; // expr(0) dans %eax
         std::cout << "    subl %ecx, %eax\n";      // %eax = expr(0) - expr(1)
         
-        this->IR->cfg->current_bb->add_IrInstr(IRInstr::sub, IntType, {"!reg", varName, varName});
+        vector<string> v3 = {reg, indexTmp, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, v3);
     }
 
     return 0;
@@ -139,10 +151,12 @@ antlrcpp::Any IRGenVisitor::visitParens(ifccParser::ParensContext *ctx){
 antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
     string varName = createVariableTmp();
-    this->IR->cfg->current_bb->add_IrInstr(IRInstr::copy, IntType, {"!reg", varName});
+    vector<string> v = {reg, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    this->IR->cfg->current_bb->add_IrInstr(IRInstr::band, IntType, {"!reg", varName, varName});
+    vector<string> v2 = {reg, varName, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::band, IntType, v2);
 
     return 0;
 }
@@ -150,10 +164,12 @@ antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
 antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->visit(ctx->expr(0));
     string varName = createVariableTmp();
-    this->IR->cfg->current_bb->add_IrInstr(IRInstr::copy, IntType, {"!reg", varName});
+    vector<string> v = {reg, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    this->IR->cfg->current_bb->add_IrInstr(IRInstr::bxor, IntType, {"!reg", varName, varName});
+    vector<string> v2 = {reg, varName, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bxor, IntType, v2);
 
     return 0;
 }
@@ -162,10 +178,12 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
 
     this->visit(ctx->expr(0));
     string varName = createVariableTmp();
-    this->IR->cfg->current_bb->add_IrInstr(IRInstr::copy, IntType, {"!reg", varName});
+    vector<string> v = {reg, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    this->IR->cfg->current_bb->add_IrInstr(IRInstr::bor, IntType, {"!reg", varName, varName});
+    vector<string> v2 = {reg, varName, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bor, IntType, v2);
 
     return 0;
 }
