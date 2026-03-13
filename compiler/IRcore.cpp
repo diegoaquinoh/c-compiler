@@ -32,13 +32,9 @@ void CFG::add_to_symbol_table(string name, Type t){
         return;
     }
 
-    if (this->nextFreeSymbolIndex == 0) {
-        this->nextFreeSymbolIndex = -4;
-    }
-
-    this->nextFreeSymbolIndex -= 4;
     this->SymbolType[name] = t;
     this->SymbolIndex[name] = this->nextFreeSymbolIndex;
+    this->nextFreeSymbolIndex -= 4;
 }
 
 
@@ -63,6 +59,12 @@ int CFG::get_var_index(string name){
 
 Type CFG::get_var_type(string name){
     return this->SymbolType[name];
+}
+
+string CFG::new_BB_name(){
+    string bbName = "bb" + to_string(this->nextBBnumber);
+    ++this->nextBBnumber;
+    return bbName;
 }
 
 
