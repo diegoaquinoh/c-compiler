@@ -29,10 +29,13 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Prologue
     cout << "    pushq %rbp\n";
     cout << "    movq %rsp, %rbp\n";
+    
 
-    // On change la valeur du pointeur de pile pour réserver le partie du dessous aux variables et ne pas les écraser
+    // Reserve stack space: declared vars + 64 bytes for temps, aligned to 16 bytes
     int stackSize = symbolTable.size() * 4 + 4;
-    this->indexVariables = - stackSize ;
+    this->indexVariables = -stackSize;
+    int allocSize = (stackSize + 64 + 15) & ~15;
+    cout << "    subq $" << allocSize << ", %rsp\n";
 
     // Initialize implicit return value slot at -4(%rbp)
     cout << "    movl $0, -4(%rbp)\n";
@@ -46,6 +49,7 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     this->visit(ctx->return_stmt());
 
     // Epilogue
+    cout << "    movq %rbp, %rsp\n";
     cout << "    popq %rbp\n";
     cout << "    retq\n";
 
