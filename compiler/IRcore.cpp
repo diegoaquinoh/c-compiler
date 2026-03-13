@@ -76,3 +76,8 @@ BasicBlock::BasicBlock(CFG* cfg, string entry_label) {
     this->cfg = cfg;
     this->label = entry_label;
 }
+
+void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> params){
+    IRInstr* instr = new IRInstr(this, op, t, params);
+    this->instrs.push_back(instr);
+}
