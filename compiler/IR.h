@@ -29,7 +29,10 @@ class IRInstr {
 		div,
 		rmem,
 		wmem,
-		call, 
+		call,
+		bxor,
+		bor,
+		band,
 		cmp_eq,
 		cmp_lt,
 		cmp_le
