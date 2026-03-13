@@ -152,7 +152,8 @@ class CFG {
 class IR {
 	public:
 	IR();
-	CFG* cfg; /**< the CFG of this function, which includes the symbol table */
+	CFG* cfg;
+	map<string, CFG*> cfgsMap;
 
 	void gen_x86(ostream& o); /**< x86 assembly code generation for this function */
 };
