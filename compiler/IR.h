@@ -34,7 +34,8 @@ class IRInstr {
 		call, 
 		cmp_eq,
 		cmp_lt,
-		cmp_le
+		cmp_le,
+		rtrn
 	} Operation;
 
 
@@ -116,7 +117,7 @@ class BasicBlock {
  */
 class CFG {
  public:
-	CFG(IR* ast) : ast(ast) {};
+	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(0), nextBBnumber(0) {};
 
 	IR* ast; /**< The AST this CFG comes from */
 	
