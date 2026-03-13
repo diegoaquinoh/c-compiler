@@ -4,12 +4,13 @@
 
 void IR::gen_x86(ostream &o) {
     for (const auto& entry : cfgsMap) {
+        const string& functionName = entry.first;
         CFG* cfg = entry.second;
         if (cfg == nullptr) {
             continue;
         }
 
-        cfg->gen_x86_prologue(o);
+        cfg->gen_x86_prologue(o, functionName);
         cfg->gen_x86(o);
         cfg->gen_x86_epilogue(o);
     }
@@ -17,12 +18,7 @@ void IR::gen_x86(ostream &o) {
 
 // CFG // 
 
-void CFG::gen_x86_prologue(ostream &o){
-    string functionName = "main";
-    if (!this->bbs.empty()) {
-        functionName = this->bbs.front()->label;
-    }
-
+void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     #ifdef __APPLE__
         o << "    .globl _" << functionName << "\n";
         o << "_" << functionName << ":\n";

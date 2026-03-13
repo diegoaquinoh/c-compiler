@@ -126,7 +126,7 @@ class CFG {
 	// x86 code generation: could be encapsulated in a processor class in a retargetable compiler
 	void gen_x86(ostream& o);
 	string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
-	void gen_x86_prologue(ostream& o);
+	void gen_x86_prologue(ostream& o, const string& functionName);
 	void gen_x86_epilogue(ostream& o);
 
 	// symbol table methods
