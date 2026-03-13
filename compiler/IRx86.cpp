@@ -71,12 +71,19 @@ void CFG::gen_x86(ostream &o) {
 void IRInstr::gen_x86(ostream &o) {
     std::string nameVar;
     int nb;
+    int index;
     switch(this->op) {
         case IRInstr::ldconst:
             
             nameVar = this->params.at(0);
             nb = stoi(this->params.at(1));
+
+            this->bb->cfg->add_to_symbol_table(nameVar, this->t);
+
+            index = this->bb->cfg->get_var_index(nameVar);
+
             o << "ldconst " << nameVar << " = " << nb;
+            o << "    movl $" << nb << ", " << index << "(%rbp)\n";
             break;
         case IRInstr::add:
             o << "";
