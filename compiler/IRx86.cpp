@@ -50,13 +50,6 @@ void CFG::gen_x86_epilogue(ostream &o){
 
 // BasicBlock // 
 
-void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> params) {
-    IRInstr * nouvInstr = new IRInstr(this, op, t, params);
-    this->instrs.push_back(nouvInstr);
-}
-
-
-
 void BasicBlock::gen_x86(ostream &o) {
     for (auto instr : this->instrs) {
         instr->gen_x86(o);
@@ -92,5 +85,6 @@ void IRInstr::gen_x86(ostream &o) {
             o << "";
             break;
         default:
+            break;
     }
 }
