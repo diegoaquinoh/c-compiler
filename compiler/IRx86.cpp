@@ -62,24 +62,42 @@ void CFG::gen_x86(ostream &o) {
 
 
 void IRInstr::gen_x86(ostream &o) {
-    std::string nameVar;
+    std::string nameVar1, nameVar2, nameVar3;
     int nb;
-    int index;
+    int index1, index2, index3;
     switch(this->op) {
         case IRInstr::ldconst:
             
-            nameVar = this->params.at(0);
+            nameVar1 = this->params.at(0);
             nb = stoi(this->params.at(1));
 
-            this->bb->cfg->add_to_symbol_table(nameVar, this->t);
+            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            index = this->bb->cfg->get_var_index(nameVar);
+            index1 = this->bb->cfg->get_var_index(nameVar1);
 
-            o << "ldconst " << nameVar << " = " << nb;
-            o << "    movl $" << nb << ", " << index << "(%rbp)\n";
+            //o << "ldconst " << nameVar1 << " = " << nb;
+            o << "    movl $" << nb << ", " << index1 << "(%rbp)\n";
             break;
         case IRInstr::add:
-            o << "";
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+
+            //movl -4(%rbp), %eax    # On charge la 1ère valeur de la pile dans EAX
+            //addl -8(%rbp), %eax    # On ajoute la 2ème valeur de la pile à EAX
+            //movl %eax, -12(%rbp)
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    addl " << index3 << "(%rbp), %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+
             break;
         case IRInstr::rtrn: 
             o << "";
