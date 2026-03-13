@@ -60,7 +60,7 @@ int main(int argn, const char **argv)
 
   // Second Visitor: generate code using the symbol table
   IRGenVisitor v(stv.getSymbolTable());
-  v.visit(tree); */
+  v.visit(tree);
 
   // Temporaire : On définit une IR en dur pour générer le reste
 
