@@ -4,7 +4,7 @@ using namespace std;
 int CodeGenVisitor::createVariableTmp()
 {
     this->indexVariables -= 4;
-    std::cout << "movl %eax, " << this->indexVariables << "(%rbp)\n";
+    std::cout << "    movl %eax, " << this->indexVariables << "(%rbp)\n";
 
     // Si à l'avenir il faut les nommer...
     // std::string name = "tmp" + std::to_string(this->cptVariables);
@@ -73,6 +73,69 @@ antlrcpp::Any CodeGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
         this->visit(ctx->expr());
         cout << "    movl %eax, " << offset << "(%rbp)\n";
     }
+
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
+    string funcName = ctx->VAR()->getText();
+    auto args = ctx->expr();
+    
+    // 1. Evaluate each arg and save to temp stack slots
+    vector<int> argOffsets;
+    for (auto *arg : args) {
+        this->visit(arg);              // result in %eax
+        int offset = createVariableTmp(); // save %eax to stack
+        argOffsets.push_back(offset);
+    }
+    
+    // 2. Load saved args into ABI registers
+    string regs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    for (int i = 0; i < argOffsets.size(); i++) {
+        cout << "    movl " << argOffsets[i] << "(%rbp), " << regs[i] << "\n";
+    }
+    
+    // 3. Zero %eax (variadic function compatibility)
+    cout << "    movl $0, %eax\n";
+    
+    // 4. Emit call (macOS uses _ prefix, Linux uses @PLT)
+    #ifdef __APPLE__
+    cout << "    call _" << funcName << "\n";
+    #else
+    cout << "    call " << funcName << "@PLT\n";
+    #endif
+    
+    // Return value is already in %eax
+    return 0;
+}
+
+antlrcpp::Any CodeGenVisitor::visitCallStmt(ifccParser::CallStmtContext *ctx) {
+    string funcName = ctx->VAR()->getText();
+    auto args = ctx->expr();
+
+    // 1. Evaluate each arg and save to temp stack slots
+    vector<int> argOffsets;
+    for (auto *arg : args) {
+        this->visit(arg);
+        int offset = createVariableTmp();
+        argOffsets.push_back(offset);
+    }
+
+    // 2. Load saved args into ABI registers
+    string regs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    for (size_t i = 0; i < argOffsets.size(); i++) {
+        cout << "    movl " << argOffsets[i] << "(%rbp), " << regs[i] << "\n";
+    }
+
+    // 3. Zero %eax (variadic function compatibility)
+    cout << "    movl $0, %eax\n";
+
+    // 4. Emit call
+    #ifdef __APPLE__
+    cout << "    call _" << funcName << "\n";
+    #else
+    cout << "    call " << funcName << "@PLT\n";
+    #endif
 
     return 0;
 }
