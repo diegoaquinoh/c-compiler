@@ -4,7 +4,10 @@ axiom : prog EOF ;
 
 prog : 'int' 'main' '(' ')' '{' stmt* return_stmt '}' ;
 
-stmt : decl_stmt | affect_stmt ;
+stmt : 'int' decl_item (',' decl_item)* ';'      # declStmt
+     | VAR '=' expr ';'                         # affectStmt
+     | VAR '(' (expr (',' expr)*)? ')' ';'      # callStmt
+     ;
 
 decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
 decl_item : VAR ('=' expr)? ;
@@ -14,7 +17,8 @@ affect_stmt: VAR '=' expr ';' ;
 return_stmt : RETURN expr ';' ;
 
 
-expr : '(' expr ')'            # parens
+expr : VAR '(' (expr (',' expr)*)? ')' # funcCall
+     | '(' expr ')'            # parens
      |'-' expr                 # negative
      |'!' expr                 # logicalnot
      | expr OP=('*'|'/'|'%') expr  # multdiv
