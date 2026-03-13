@@ -6,15 +6,6 @@ IR::IR() {
     this->cfg = nullptr;
 }
 
-void IRInstr::gen_x86(ostream &o) {
-    switch(this->op) {
-        case IRInstr::ldconst:
-            o << "ldconst";
-            break;
-        default:
-    }
-}
-
 
 // BasicBlock // 
 
