@@ -7,15 +7,13 @@
 #include <initializer_list>
 using namespace std;
 // Declarations from the parser -- replace with your own
+#include "Type.h"
 // #include "symbole.h"
 
 class BasicBlock;
 class CFG;
 class DefFonction;
 class IR;
-
-typedef enum {IntType} Type;
-
 
 //! The class for one 3-address instruction
 class IRInstr {
