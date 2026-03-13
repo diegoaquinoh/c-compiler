@@ -10,6 +10,7 @@
 
 #include "SymbolTableVisitor.h"
 #include "IRGenVisitor.h"
+#include "IR.h"
 
 using namespace antlr4;
 using namespace std;
@@ -50,7 +51,7 @@ int main(int argn, const char **argv)
   }
 
   // First Visitor: build symbol table and check for errors
-  SymbolTableVisitor stv;
+/*   SymbolTableVisitor stv;
   stv.visit(tree);
 
   if (stv.hasError()) {
@@ -59,7 +60,24 @@ int main(int argn, const char **argv)
 
   // Second Visitor: generate code using the symbol table
   IRGenVisitor v(stv.getSymbolTable());
-  v.visit(tree);
+  v.visit(tree); */
+
+  // Temporaire : On définit une IR en dur pour générer le reste
+
+  IR ir;
+  CFG cfg(&ir);
+  BasicBlock bb(&cfg, "entry_label1");
+
+  //IRInstr instrPlus(&bb, IRInstr::ldconst, IntType, {"var1", "4"});
+
+
+  bb.add_IRInstr(IRInstr::ldconst, IntType, {"var1", "4"});
+
+  bb.gen_x86(std::cout);
+
+  
+
+
 
   return 0;
 }

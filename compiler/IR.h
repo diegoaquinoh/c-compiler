@@ -1,6 +1,7 @@
 #ifndef IR_H
 #define IR_H
 
+#include <map>
 #include <vector>
 #include <string>
 #include <iostream>
@@ -38,10 +39,10 @@ class IRInstr {
 
 
 	/**  constructor */
-	IRInstr(BasicBlock* bb_, Operation op, Type t, vector<string> params);
+	IRInstr(BasicBlock* bb_, Operation op, Type t, vector<string> params) : bb(bb_), op(op), t(t), params(params) {};
 	
 	/** Actual code generation */
-	void gen_asm(ostream &o); /**< x86 assembly code generation for this IR instruction */
+	void gen_x86(ostream &o); /**< x86 assembly code generation for this IR instruction */
 	
  private:
 	BasicBlock* bb; /**< The BB this instruction belongs to, which provides a pointer to the CFG this instruction belong to */
@@ -63,7 +64,7 @@ class IRInstr {
 	  returning a boolean value (as an int)
 
 	 Assembly jumps are generated as follows:
-	 BasicBlock::gen_asm() first calls IRInstr::gen_asm() on all its instructions, and then 
+	 BasicBlock::gen_x86() first calls IRInstr::gen_x86() on all its instructions, and then 
 		    if  exit_true  is a  nullptr, 
             the epilogue is generated
         else if exit_false is a nullptr, 
@@ -84,7 +85,7 @@ Possible optimization:
 class BasicBlock {
  public:
 	BasicBlock(CFG* cfg, string entry_label);
-	void gen_asm(ostream &o); /**< x86 assembly code generation for this basic block (very simple) */
+	void gen_x86(ostream &o); /**< x86 assembly code generation for this basic block (very simple) */
 
 	void add_IRInstr(IRInstr::Operation op, Type t, vector<string> params);
 
@@ -115,17 +116,17 @@ class BasicBlock {
  */
 class CFG {
  public:
-	CFG(DefFonction* ast);
+	CFG(IR* ast) : ast(ast) {};
 
-	DefFonction* ast; /**< The AST this CFG comes from */
+	IR* ast; /**< The AST this CFG comes from */
 	
 	void add_bb(BasicBlock* bb); 
 
 	// x86 code generation: could be encapsulated in a processor class in a retargetable compiler
-	void gen_asm(ostream& o);
+	void gen_x86(ostream& o);
 	string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
-	void gen_asm_prologue(ostream& o);
-	void gen_asm_epilogue(ostream& o);
+	void gen_x86_prologue(ostream& o);
+	void gen_x86_epilogue(ostream& o);
 
 	// symbol table methods
 	void add_to_symbol_table(string name, Type t);
@@ -149,11 +150,10 @@ class CFG {
 
 class IR {
 	public:
-	IR() = default;
-	IR(DefFonction* ast);
+	IR();
 	CFG* cfg; /**< the CFG of this function, which includes the symbol table */
 
-	void gen_asm(ostream& o); /**< x86 assembly code generation for this function */
+	void gen_x86(ostream& o); /**< x86 assembly code generation for this function */
 };
 
 #endif
