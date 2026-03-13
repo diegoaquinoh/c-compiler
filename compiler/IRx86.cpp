@@ -2,19 +2,6 @@
 
 // IR //
 
-IR::IR() {
-    this->cfg = nullptr;
-}
-
-void IRInstr::gen_x86(ostream &o) {
-    switch(this->op) {
-        case IRInstr::ldconst:
-            o << "ldconst";
-            break;
-        default:
-    }
-}
-
 void IR::gen_x86(ostream &o) {
     for (const auto& entry : cfgsMap) {
         CFG* cfg = entry.second;
@@ -62,12 +49,6 @@ void CFG::gen_x86_epilogue(ostream &o){
 }
 
 // BasicBlock // 
-
-BasicBlock::BasicBlock(CFG* cfg, string entry_label) {
-    this->cfg = cfg;
-    this->label = entry_label;
-}
-
 
 void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> params) {
     IRInstr * nouvInstr = new IRInstr(this, op, t, params);
