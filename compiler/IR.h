@@ -122,7 +122,9 @@ class BasicBlock {
  */
 class CFG {
  public:
-	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(0), nextBBnumber(0) {};
+	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(0), nextBBnumber(0) {
+		add_bb(new BasicBlock(this, "main"));
+	};
 
 	IR* ast; /**< The AST this CFG comes from */
 	
@@ -158,6 +160,7 @@ class CFG {
 class IR {
 	public:
 	IR();
+	//~IR();
 	IR(DefFonction* ast);
 	CFG* currentCfg;
 	map<string, CFG*> cfgsMap;

@@ -121,15 +121,9 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     this->visit(ctx->expr(1));
 
     if (op == "+") {
-        std::cout << "    addl " << indexTmp << "(%rbp), %eax\n";
-
         vector<string> v2 = {string(reg), indexTmp, string(reg)};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, IntType, v2);
     } else {
-        std::cout << "    movl %eax, %ecx\n";      // expr(1) dans %ecx
-        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n"; // expr(0) dans %eax
-        std::cout << "    subl %ecx, %eax\n";      // %eax = expr(0) - expr(1)
-        
         vector<string> v3 = {reg, indexTmp, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, v3);
     }
