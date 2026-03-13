@@ -65,7 +65,7 @@ void IRInstr::gen_x86(ostream &o) {
     int index1, index2, index3;
     switch(this->op) {
         case IRInstr::ldconst:
-            
+            // var1 = const
             nameVar1 = this->params.at(0);
             nb = stoi(this->params.at(1));
 
@@ -132,6 +132,38 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar1 = this->params.at(0);
             index1 = this->bb->cfg->get_var_index(nameVar1);
             o <<"    negl "<< index1 <<"(%rbp)\n";
+        case IRInstr::mul:
+            // var1 = var2 * var3
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    imull " << index3 << "(%rbp), %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            break;
+        case IRInstr::div:
+            // Forme : var1 = var2 / var3
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    cltd" << endl;
+            o << "    idivl " << index3 << "(%rbp)" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
             break;
         default:
             break;
