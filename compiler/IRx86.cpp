@@ -71,10 +71,10 @@ void IRInstr::gen_x86(ostream &o) {
 
             index1 = this->bb->cfg->get_var_index(nameVar1);
 
-            //o << "ldconst " << nameVar1 << " = " << nb;
             o << "    movl $" << nb << ", " << index1 << "(%rbp)\n";
             break;
         case IRInstr::add:
+            // var1 = var2 + var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -85,18 +85,26 @@ void IRInstr::gen_x86(ostream &o) {
             index2 = this->bb->cfg->get_var_index(nameVar2);
             index3 = this->bb->cfg->get_var_index(nameVar3);
 
-
-            //movl -4(%rbp), %eax    # On charge la 1ère valeur de la pile dans EAX
-            //addl -8(%rbp), %eax    # On ajoute la 2ème valeur de la pile à EAX
-            //movl %eax, -12(%rbp)
-
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    addl " << index3 << "(%rbp), %eax" << endl;
             o << "    movl %eax, " << index1 << "(%rbp)" << endl;
 
             break;
-        case IRInstr::rtrn: 
-            o << "";
+        case IRInstr::sub:
+            // var1 = var2 - var3
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    subl " << index3 << "(%rbp), %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
             break;
         default:
             break;
