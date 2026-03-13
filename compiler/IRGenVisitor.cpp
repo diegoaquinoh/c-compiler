@@ -49,7 +49,6 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx)
 {
     string varName = ctx->VAR()->getText();
-    int offset = symbolTable[varName];
 
     this->visit(ctx->expr());
 
@@ -62,9 +61,8 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
     int val = stoi(ctx->CONST()->getText());
-    string varName = IRGenVisitor::createVariableTmp();
 
-    vector<string> v = {varName, reg};
+    vector<string> v = {reg, to_string(val)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
 
     return 0;
