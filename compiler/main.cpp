@@ -51,7 +51,7 @@ int main(int argn, const char **argv)
   }
 
   // First Visitor: build symbol table and check for errors
-/*   SymbolTableVisitor stv;
+  SymbolTableVisitor stv;
   stv.visit(tree);
 
   if (stv.hasError()) {
@@ -83,7 +83,9 @@ cfg.add_bb(&bb);
 ir.cfgsMap.insert({"main", &cfg});
 ir.gen_x86(std::cout);
 
+  v.visit(tree);  
 
+  v.getIR().toString();
 
   return 0;
 }
