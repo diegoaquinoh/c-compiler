@@ -53,7 +53,9 @@ void BasicBlock::gen_x86(ostream &o) {
 }
 
 void CFG::gen_x86(ostream &o) {
-
+    for (auto bb : this->bbs) {
+        bb->gen_x86(o);
+    }
 }
 
 

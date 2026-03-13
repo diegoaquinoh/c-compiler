@@ -61,10 +61,10 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
-    int val = stoi(ctx->CONST()->getText());
+    std:string val = ctx->CONST()->getText();
     string varName = IRGenVisitor::createVariableTmp();
 
-    vector<string> v = {varName, reg};
+    vector<string> v = {varName, val};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
 
     return 0;
