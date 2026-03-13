@@ -65,7 +65,7 @@ void IRInstr::gen_x86(ostream &o) {
     int index1, index2, index3;
     switch(this->op) {
         case IRInstr::ldconst:
-            
+            // var1 = const
             nameVar1 = this->params.at(0);
             nb = stoi(this->params.at(1));
 
@@ -146,9 +146,9 @@ void IRInstr::gen_x86(ostream &o) {
             break;
         case IRInstr::div:
             // Forme : var1 = var2 / var3
-            nameVar1 = this->params.at(0); // Destination (le quotient)
-            nameVar2 = this->params.at(1); // Dividende (gauche : le nombre à diviser)
-            nameVar3 = this->params.at(2); // Diviseur (droite : par quoi on divise)
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
