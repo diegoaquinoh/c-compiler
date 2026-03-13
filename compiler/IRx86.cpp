@@ -68,3 +68,22 @@ void CFG::gen_x86(ostream &o) {
 }
 
 
+void IRInstr::gen_x86(ostream &o) {
+    std::string nameVar;
+    int nb;
+    switch(this->op) {
+        case IRInstr::ldconst:
+            
+            nameVar = this->params.at(0);
+            nb = stoi(this->params.at(1));
+            o << "ldconst " << nameVar << " = " << nb;
+            break;
+        case IRInstr::add:
+            o << "";
+            break;
+        case IRInstr::rtrn: 
+            o << "";
+            break;
+        default:
+    }
+}
