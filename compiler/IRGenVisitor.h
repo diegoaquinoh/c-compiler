@@ -44,7 +44,6 @@ class IRGenVisitor : public ifccBaseVisitor {
         
         private:
                 int cptTempVariables = 0;
-                int indexVariables;
                 IR ir;
 
 

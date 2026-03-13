@@ -49,7 +49,6 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx)
 {
     string varName = ctx->VAR()->getText();
-    int offset = symbolTable[varName];
 
     this->visit(ctx->expr());
 
@@ -61,10 +60,9 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
-    std:string val = ctx->CONST()->getText();
-    string varName = IRGenVisitor::createVariableTmp();
+    int val = stoi(ctx->CONST()->getText());
 
-    vector<string> v = {varName, val};
+    vector<string> v = {reg, to_string(val)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
 
     return 0;
@@ -121,15 +119,9 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     this->visit(ctx->expr(1));
 
     if (op == "+") {
-        std::cout << "    addl " << indexTmp << "(%rbp), %eax\n";
-
         vector<string> v2 = {string(reg), indexTmp, string(reg)};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, IntType, v2);
     } else {
-        std::cout << "    movl %eax, %ecx\n";      // expr(1) dans %ecx
-        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n"; // expr(0) dans %eax
-        std::cout << "    subl %ecx, %eax\n";      // %eax = expr(0) - expr(1)
-        
         vector<string> v3 = {reg, indexTmp, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, v3);
     }

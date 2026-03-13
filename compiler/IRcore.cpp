@@ -4,8 +4,11 @@
 // IR //
 
 IR::IR() {
-    this->currentCfg = nullptr;
+    this->currentCfg = new CFG(this);
 }
+// IR::~IR() {
+//     delete currentCfg;
+// }
 
 // CFG //
 
