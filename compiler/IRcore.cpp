@@ -1,9 +1,10 @@
 #include "IR.h"
+#include <sstream>
 
 // IR //
 
 IR::IR() {
-    this->cfg = nullptr;
+    this->currentCfg = nullptr;
 }
 
 // CFG //
@@ -66,4 +67,83 @@ string CFG::new_BB_name(){
 BasicBlock::BasicBlock(CFG* cfg, string entry_label) {
     this->cfg = cfg;
     this->label = entry_label;
+}
+
+
+// Print operations
+static const char* opToString(IRInstr::Operation op) {
+    switch (op) {
+        case IRInstr::ldconst: return "ldconst";
+        case IRInstr::copy:   return "copy";
+        case IRInstr::add:    return "add";
+        case IRInstr::sub:    return "sub";
+        case IRInstr::mul:    return "mul";
+        case IRInstr::div:    return "div";
+        case IRInstr::neg:    return "neg";
+        case IRInstr::rmem:   return "rmem";
+        case IRInstr::wmem:   return "wmem";
+        case IRInstr::call:   return "call";
+        case IRInstr::bxor:   return "bxor";
+        case IRInstr::bor:    return "bor";
+        case IRInstr::band:   return "band";
+        case IRInstr::cmp_eq: return "cmp_eq";
+        case IRInstr::cmp_lt: return "cmp_lt";
+        case IRInstr::cmp_le: return "cmp_le";
+        case IRInstr::rtrn:   return "rtrn";
+        default:              return "<unknown>";
+    }
+}
+
+string IRInstr::toString() const {
+    ostringstream oss;
+    oss << opToString(op);
+    for (const auto &p : params) {
+        oss << " " << p;
+    }
+    return oss.str();
+}
+
+string BasicBlock::toString() const {
+    ostringstream oss;
+    oss << "BB " << label << ":\n";
+    for (auto instr : instrs) {
+        oss << "  " << instr->toString() << "\n";
+    }
+    oss << "  exit_true=" << (exit_true ? exit_true->label : "null")
+        << " exit_false=" << (exit_false ? exit_false->label : "null") << "\n";
+    if (!test_var_name.empty()) {
+        oss << "  test_var=" << test_var_name << "\n";
+    }
+    return oss.str();
+}
+
+string CFG::toString() const {
+    ostringstream oss;
+    string name = "<unknown>";
+    if (!bbs.empty()) {
+        name = bbs.front()->label;
+    }
+    oss << "CFG " << name << ":\n";
+    for (auto bb : bbs) {
+        oss << bb->toString();
+    }
+    return oss.str();
+}
+
+string IR::toString() const {
+    ostringstream oss;
+    for (const auto &entry : cfgsMap) {
+        oss << "CFG name=\"" << entry.first << "\"\n";
+        if (entry.second) {
+            oss << entry.second->toString();
+        } else {
+            oss << "  <null CFG>\n";
+        }
+    }
+    return oss.str();
+}
+
+ostream& operator<<(ostream &o, const IR &ir) {
+    o << ir.toString();
+    return o;
 }

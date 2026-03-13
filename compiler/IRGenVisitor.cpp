@@ -139,7 +139,8 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitNegative(ifccParser::NegativeContext *ctx){
     this->visit(ctx->expr());
-    this->IR->cfg->current_bb->add_IRInstr(IRInstr::neg, IntType, {"!reg", "!reg"});
+    vector<string> v = {reg, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::neg, IntType, v);
     return 0;
 }
 

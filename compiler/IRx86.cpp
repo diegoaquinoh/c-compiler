@@ -92,5 +92,6 @@ void IRInstr::gen_x86(ostream &o) {
             o << "";
             break;
         default:
+            break;
     }
 }

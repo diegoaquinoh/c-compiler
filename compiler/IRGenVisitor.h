@@ -40,6 +40,7 @@ class IRGenVisitor : public ifccBaseVisitor {
         // Return statement visitor
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
 
+        IR getIR() const { return this->ir; }
         
         private:
                 int cptTempVariables = 0;

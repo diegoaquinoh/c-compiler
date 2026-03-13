@@ -47,6 +47,7 @@ class IRInstr {
 	
 	/** Actual code generation */
 	void gen_x86(ostream &o); /**< x86 assembly code generation for this IR instruction */
+	string toString() const;
 	
  private:
 	BasicBlock* bb; /**< The BB this instruction belongs to, which provides a pointer to the CFG this instruction belong to */
@@ -90,6 +91,7 @@ class BasicBlock {
  public:
 	BasicBlock(CFG* cfg, string entry_label);
 	void gen_x86(ostream &o); /**< x86 assembly code generation for this basic block (very simple) */
+	string toString() const;
 
 	void add_IRInstr(IRInstr::Operation op, Type t, vector<string> params);
 
@@ -128,6 +130,7 @@ class CFG {
 
 	// x86 code generation: could be encapsulated in a processor class in a retargetable compiler
 	void gen_x86(ostream& o);
+	string toString() const;
 	string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
 	void gen_x86_prologue(ostream& o);
 	void gen_x86_epilogue(ostream& o);
@@ -154,12 +157,15 @@ class CFG {
 
 class IR {
 	public:
-	IR() = default;
+	IR();
 	IR(DefFonction* ast);
 	CFG* currentCfg;
 	map<string, CFG*> cfgsMap;
 
 	void gen_x86(ostream& o); /**< x86 assembly code generation for this function */
+	string toString() const;
 };
+
+ostream& operator<<(ostream &o, const IR &ir);
 
 #endif
