@@ -8,15 +8,13 @@
 #include <initializer_list>
 using namespace std;
 // Declarations from the parser -- replace with your own
+#include "Type.h"
 // #include "symbole.h"
 
 class BasicBlock;
 class CFG;
 class DefFonction;
 class IR;
-
-typedef enum {IntType} Type;
-
 
 //! The class for one 3-address instruction
 class IRInstr {
@@ -29,9 +27,14 @@ class IRInstr {
 		add,
 		sub,
 		mul,
+		div,
+		neg, // -(1) => neg var1 => var1 = -var1
 		rmem,
 		wmem,
-		call, 
+		call,
+		bxor,
+		bor,
+		band,
 		cmp_eq,
 		cmp_lt,
 		cmp_le,
@@ -151,8 +154,9 @@ class CFG {
 
 class IR {
 	public:
-	IR();
-	CFG* cfg;
+	IR() = default;
+	IR(DefFonction* ast);
+	CFG* currentCfg;
 	map<string, CFG*> cfgsMap;
 
 	void gen_x86(ostream& o); /**< x86 assembly code generation for this function */

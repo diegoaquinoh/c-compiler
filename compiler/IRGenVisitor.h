@@ -2,7 +2,7 @@
 
 #include "antlr4-runtime.h"
 #include "generated/ifccBaseVisitor.h"
-#include "IR.h"
+#include "IR.h" 
 #include <map>
 #include <string>
 using namespace std;
@@ -13,7 +13,7 @@ class IRGenVisitor : public ifccBaseVisitor {
         map<string, int> symbolTable;
         IRGenVisitor(const map<string, int> &symTable) : symbolTable(symTable) {}
 
-        virtual int createVariableTmp();
+        virtual string createVariableTmp();
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
 
@@ -40,9 +40,11 @@ class IRGenVisitor : public ifccBaseVisitor {
         // Return statement visitor
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
 
+        
         private:
-                int cptVariables = 0;
+                int cptTempVariables = 0;
                 int indexVariables;
                 IR ir;
+
 
 };

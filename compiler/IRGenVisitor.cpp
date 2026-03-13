@@ -1,35 +1,17 @@
 #include "IRGenVisitor.h"
 using namespace std;
 
-int IRGenVisitor::createVariableTmp()
-{
-    this->indexVariables -= 4;
-    std::cout << "movl %eax, " << this->indexVariables << "(%rbp)\n";
+string reg = "!reg";
 
-    return this->indexVariables;
+string IRGenVisitor::createVariableTmp() {
+    string tmpName = "!tmp" + to_string(cptTempVariables++);
+    int offset = -4 * cptTempVariables;
+    symbolTable[tmpName] = offset;
+    return tmpName;
 }
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
-    #ifdef __APPLE__
-    cout << "    .globl _main\n";
-    cout << "_main:\n";
-    #else
-    cout << "    .globl main\n";
-    cout << "main:\n";
-    #endif
-
-    // Prologue
-    cout << "    pushq %rbp\n";
-    cout << "    movq %rsp, %rbp\n";
-
-    // On change la valeur du pointeur de pile pour réserver le partie du dessous aux variables et ne pas les écraser
-    int stackSize = symbolTable.size() * 4 + 4;
-    this->indexVariables = - stackSize ;
-
-    // Initialize implicit return value slot at -4(%rbp)
-    cout << "    movl $0, -4(%rbp)\n";
-
     // Visit all statements
     for (auto *stmt : ctx->stmt()) {
         this->visit(stmt);
@@ -38,9 +20,6 @@ antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Visit return statement
     this->visit(ctx->return_stmt());
 
-    // Epilogue
-    cout << "    popq %rbp\n";
-    cout << "    retq\n";
 
     return 0;
 }
@@ -60,7 +39,8 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 
     if (ctx->expr()) {
         this->visit(ctx->expr());
-        cout << "    movl %eax, " << offset << "(%rbp)\n";
+        vector<string> v = {varName, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     }
 
     return 0;
@@ -72,7 +52,9 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
     int offset = symbolTable[varName];
 
     this->visit(ctx->expr());
-    cout << "    movl %eax, " << offset << "(%rbp)\n";
+
+    vector<string> v = {varName, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     return 0;
 }
@@ -80,15 +62,20 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
     int val = stoi(ctx->CONST()->getText());
-    cout << "    movl $" << val << ", %eax\n";
+    string varName = IRGenVisitor::createVariableTmp();
+
+    vector<string> v = {varName, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 {
-    int offsetSrc = symbolTable[ctx->VAR()->getText()];
-    cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+    string varName = ctx->VAR()->getText();
+
+    vector<string> v = {varName, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     return 0;
 }
@@ -105,26 +92,18 @@ antlrcpp::Any IRGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
     auto op = ctx->OP->getText();
     this->visit(ctx->expr(0));
 
-    auto indexTmp = createVariableTmp();
+    string indexTmp = createVariableTmp();
+    vector<string> v = {reg, indexTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     
     this->visit(ctx->expr(1));
-
+    
     if (op == "*") {
-        std::cout << "    imull " << indexTmp << "(%rbp), %eax\n";
+        vector<string> v2 = {reg, indexTmp, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, v2);
     } else {
- 
-        // On met la DROITE (numérateur) dans %ecx
-        std::cout << "    movl %eax, %ecx\n";
-        
-        // On met la GAUCHE (dénominateur) dans %eax
-        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n";
-
-        // Extension de signe (Obligatoire pour idivl)
-        // Étend le signe de %eax vers %edx pour former le nombre 64 bits %edx:%eax
-        std::cout << "    cltd\n";
-
-        // % eax =  (%edx:%eax) / %ecx
-        std::cout << "    idivl %ecx\n";
+        vector<string> v3 = {reg, indexTmp, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::div, IntType, v3);
     }
 
     return 0;
@@ -135,16 +114,24 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     auto op = ctx->OP->getText();
     this->visit(ctx->expr(0));
 
-    int indexTmp = createVariableTmp();
+    string indexTmp = createVariableTmp();
+    vector<string> v = {reg, indexTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     
     this->visit(ctx->expr(1));
 
     if (op == "+") {
         std::cout << "    addl " << indexTmp << "(%rbp), %eax\n";
+
+        vector<string> v2 = {string(reg), indexTmp, string(reg)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, IntType, v2);
     } else {
         std::cout << "    movl %eax, %ecx\n";      // expr(1) dans %ecx
         std::cout << "    movl " << indexTmp << "(%rbp), %eax\n"; // expr(0) dans %eax
         std::cout << "    subl %ecx, %eax\n";      // %eax = expr(0) - expr(1)
+        
+        vector<string> v3 = {reg, indexTmp, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, v3);
     }
 
     return 0;
@@ -152,7 +139,7 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitNegative(ifccParser::NegativeContext *ctx){
     this->visit(ctx->expr());
-    std::cout << "    negl %eax\n";
+    this->IR->cfg->current_bb->add_IRInstr(IRInstr::neg, IntType, {"!reg", "!reg"});
     return 0;
 }
 
@@ -163,33 +150,40 @@ antlrcpp::Any IRGenVisitor::visitParens(ifccParser::ParensContext *ctx){
 
 antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
-    int indexTmp = createVariableTmp();
-    
-    this->visit(ctx->expr(1));
+    string varName = createVariableTmp();
+    vector<string> v = {reg, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
-    std::cout << "    andl " << indexTmp << "(%rbp), %eax\n";
+    this->visit(ctx->expr(1));
+    vector<string> v2 = {reg, varName, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::band, IntType, v2);
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->visit(ctx->expr(0));
-    int indexTmp = createVariableTmp();
-    
-    this->visit(ctx->expr(1));
+    string varName = createVariableTmp();
+    vector<string> v = {reg, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
-    std::cout << "    xorl " << indexTmp << "(%rbp), %eax\n";
+    this->visit(ctx->expr(1));
+    vector<string> v2 = {reg, varName, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bxor, IntType, v2);
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
-    this->visit(ctx->expr(0));
-    int indexTmp = createVariableTmp();
-    
-    this->visit(ctx->expr(1));
 
-    std::cout << "    orl " << indexTmp << "(%rbp), %eax\n";
+    this->visit(ctx->expr(0));
+    string varName = createVariableTmp();
+    vector<string> v = {reg, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+
+    this->visit(ctx->expr(1));
+    vector<string> v2 = {reg, varName, varName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bor, IntType, v2);
 
     return 0;
 }
