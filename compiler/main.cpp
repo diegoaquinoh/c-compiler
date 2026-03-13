@@ -72,13 +72,14 @@ int main(int argn, const char **argv)
 // bb.add_IRInstr(IRInstr::add, IntType, {"var3", "var1", "var2"});
 // bb.gen_x86(std::cout);
 
- IR ir;
+IR ir;
 CFG cfg(&ir);
 string name = cfg.new_BB_name();
 BasicBlock bb(&cfg, name);
 bb.add_IRInstr(IRInstr::ldconst, IntType, {"var1", "4"});
 bb.add_IRInstr(IRInstr::ldconst, IntType, {"var2", "6"});
 bb.add_IRInstr(IRInstr::add, IntType, {"var3", "var1", "var2"});
+bb.add_IRInstr(IRInstr::neg, IntType, {"var3"});
 bb.add_IRInstr(IRInstr::rtrn, IntType, {"var3"});
 cfg.add_bb(&bb);
 ir.cfgsMap.insert({"main", &cfg});

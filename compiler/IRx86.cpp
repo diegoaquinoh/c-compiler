@@ -120,12 +120,19 @@ void IRInstr::gen_x86(ostream &o) {
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            break;
         case IRInstr::rtrn:
             nameVar1 = this->params.at(0);
 
             index1 = this->bb->cfg->get_var_index(nameVar1);
 
             o << "    movl " << index1 << "(%rbp), %eax" << endl;
+            break;
+        case IRInstr::neg:
+            nameVar1 = this->params.at(0);
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            o <<"    negl "<< index1 <<"(%rbp)\n";
+            break;
         default:
             break;
     }
