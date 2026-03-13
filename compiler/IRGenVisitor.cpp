@@ -111,15 +111,9 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     this->visit(ctx->expr(1));
 
     if (op == "+") {
-        std::cout << "    addl " << indexTmp << "(%rbp), %eax\n";
-
-        this->IR->cfg->current_bb->add_IrInstr(IRInstr::add, IntType, {"!reg!", varName, varName});
+        this->IR->cfg->current_bb->add_IRInstr(IRInstr::add, IntType, {"!reg", indexTmp, "!reg"});
     } else {
-        std::cout << "    movl %eax, %ecx\n";      // expr(1) dans %ecx
-        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n"; // expr(0) dans %eax
-        std::cout << "    subl %ecx, %eax\n";      // %eax = expr(0) - expr(1)
-        
-        this->IR->cfg->current_bb->add_IrInstr(IRInstr::sub, IntType, {"!reg!", varName, varName});
+        this->IR->cfg->current_bb->add_IRInstr(IRInstr::sub, IntType, {"!reg", indexTmp, "!reg"});
     }
 
     return 0;
@@ -127,7 +121,7 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitNegative(ifccParser::NegativeContext *ctx){
     this->visit(ctx->expr());
-    std::cout << "    negl %eax\n";
+    this->IR->cfg->current_bb->add_IRInstr(IRInstr::neg, IntType, {"!reg", "!reg"});
     return 0;
 }
 
