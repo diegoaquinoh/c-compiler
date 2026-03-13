@@ -1,35 +1,9 @@
 #include "IRGenVisitor.h"
 using namespace std;
 
-int IRGenVisitor::createVariableTmp()
-{
-    this->indexVariables -= 4;
-    std::cout << "movl %eax, " << this->indexVariables << "(%rbp)\n";
-
-    return this->indexVariables;
-}
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
-    #ifdef __APPLE__
-    cout << "    .globl _main\n";
-    cout << "_main:\n";
-    #else
-    cout << "    .globl main\n";
-    cout << "main:\n";
-    #endif
-
-    // Prologue
-    cout << "    pushq %rbp\n";
-    cout << "    movq %rsp, %rbp\n";
-
-    // On change la valeur du pointeur de pile pour réserver le partie du dessous aux variables et ne pas les écraser
-    int stackSize = symbolTable.size() * 4 + 4;
-    this->indexVariables = - stackSize ;
-
-    // Initialize implicit return value slot at -4(%rbp)
-    cout << "    movl $0, -4(%rbp)\n";
-
     // Visit all statements
     for (auto *stmt : ctx->stmt()) {
         this->visit(stmt);
@@ -38,9 +12,6 @@ antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Visit return statement
     this->visit(ctx->return_stmt());
 
-    // Epilogue
-    cout << "    popq %rbp\n";
-    cout << "    retq\n";
 
     return 0;
 }
@@ -72,7 +43,8 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
     int offset = symbolTable[varName];
 
     this->visit(ctx->expr());
-    cout << "    movl %eax, " << offset << "(%rbp)\n";
+
+    this->IR.createBasicBlock->add_instr(IRInstr::copy, IntType, {varName, "!reg!"});
 
     return 0;
 }
