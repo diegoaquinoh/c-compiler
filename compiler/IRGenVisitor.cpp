@@ -44,7 +44,7 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 
     this->visit(ctx->expr());
 
-    this->IR.createBasicBlock->add_instr(IRInstr::copy, IntType, {varName, "!reg!"});
+    this->IR->cfg->current_bb->add_IrInstr(IRInstr::copy, IntType, {varName, "!reg!"});
 
     return 0;
 }
@@ -113,10 +113,14 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
 
     if (op == "+") {
         std::cout << "    addl " << indexTmp << "(%rbp), %eax\n";
+
+        this->IR->cfg->current_bb->add_IrInstr(IRInstr::add, IntType, {"!reg!", varName, varName});
     } else {
         std::cout << "    movl %eax, %ecx\n";      // expr(1) dans %ecx
         std::cout << "    movl " << indexTmp << "(%rbp), %eax\n"; // expr(0) dans %eax
         std::cout << "    subl %ecx, %eax\n";      // %eax = expr(0) - expr(1)
+        
+        this->IR->cfg->current_bb->add_IrInstr(IRInstr::sub, IntType, {"!reg!", varName, varName});
     }
 
     return 0;

@@ -151,7 +151,8 @@ class IR {
 	public:
 	IR() = default;
 	IR(DefFonction* ast);
-	CFG* cfg; /**< the CFG of this function, which includes the symbol table */
+	CFG* currentCfg;
+	map<string, CFG*> cfgs;
 
 	void gen_asm(ostream& o); /**< x86 assembly code generation for this function */
 };
