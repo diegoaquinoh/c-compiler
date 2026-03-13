@@ -1,6 +1,12 @@
 #include "IRGenVisitor.h"
 using namespace std;
 
+string IRGenVisitor::createVariableTmp() {
+    string tmpName = "!tmp" + to_string(cptTempVariables++);
+    int offset = -4 * cptTempVariables;
+    symbolTable[tmpName] = offset;
+    return tmpName;
+}
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
@@ -44,7 +50,7 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 
     this->visit(ctx->expr());
 
-    this->IR.createBasicBlock->add_instr(IRInstr::copy, IntType, {varName, "!reg!"});
+    //this->IR.createBasicBlock->add_instr(IRInstr::copy, IntType, {varName, "!reg!"});
 
     return 0;
 }
@@ -107,7 +113,7 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     auto op = ctx->OP->getText();
     this->visit(ctx->expr(0));
 
-    int indexTmp = createVariableTmp();
+    string indexTmp = createVariableTmp();
     
     this->visit(ctx->expr(1));
 
@@ -135,7 +141,7 @@ antlrcpp::Any IRGenVisitor::visitParens(ifccParser::ParensContext *ctx){
 
 antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
-    int indexTmp = createVariableTmp();
+    string indexTmp = createVariableTmp();
     
     this->visit(ctx->expr(1));
 
@@ -146,7 +152,7 @@ antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
 
 antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->visit(ctx->expr(0));
-    int indexTmp = createVariableTmp();
+    string indexTmp = createVariableTmp();
     
     this->visit(ctx->expr(1));
 
@@ -157,7 +163,7 @@ antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
 
 antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
     this->visit(ctx->expr(0));
-    int indexTmp = createVariableTmp();
+    string indexTmp = createVariableTmp();
     
     this->visit(ctx->expr(1));
 
