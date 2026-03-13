@@ -30,7 +30,10 @@ class IRInstr {
 		neg, // -(1) => neg var1 => var1 = -var1
 		rmem,
 		wmem,
-		call, 
+		call,
+		bxor,
+		bor,
+		band,
 		cmp_eq,
 		cmp_lt,
 		cmp_le

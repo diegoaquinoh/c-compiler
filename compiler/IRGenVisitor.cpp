@@ -37,7 +37,7 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 
     if (ctx->expr()) {
         this->visit(ctx->expr());
-        this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg!"});
+        this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg"});
     }
 
     return 0;
@@ -50,7 +50,7 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 
     this->visit(ctx->expr());
 
-    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg!"});
+    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg"});
 
     return 0;
 }
@@ -132,33 +132,34 @@ antlrcpp::Any IRGenVisitor::visitParens(ifccParser::ParensContext *ctx){
 
 antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
-    string indexTmp = createVariableTmp();
-    
-    this->visit(ctx->expr(1));
+    string varName = createVariableTmp();
+    this->IR->cfg->current_bb->add_IrInstr(IRInstr::copy, IntType, {"!reg", varName});
 
-    std::cout << "    andl " << indexTmp << "(%rbp), %eax\n";
+    this->visit(ctx->expr(1));
+    this->IR->cfg->current_bb->add_IrInstr(IRInstr::band, IntType, {"!reg", varName, varName});
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->visit(ctx->expr(0));
-    string indexTmp = createVariableTmp();
-    
-    this->visit(ctx->expr(1));
+    string varName = createVariableTmp();
+    this->IR->cfg->current_bb->add_IrInstr(IRInstr::copy, IntType, {"!reg", varName});
 
-    std::cout << "    xorl " << indexTmp << "(%rbp), %eax\n";
+    this->visit(ctx->expr(1));
+    this->IR->cfg->current_bb->add_IrInstr(IRInstr::bxor, IntType, {"!reg", varName, varName});
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
-    this->visit(ctx->expr(0));
-    string indexTmp = createVariableTmp();
-    
-    this->visit(ctx->expr(1));
 
-    std::cout << "    orl " << indexTmp << "(%rbp), %eax\n";
+    this->visit(ctx->expr(0));
+    string varName = createVariableTmp();
+    this->IR->cfg->current_bb->add_IrInstr(IRInstr::copy, IntType, {"!reg", varName});
+
+    this->visit(ctx->expr(1));
+    this->IR->cfg->current_bb->add_IrInstr(IRInstr::bor, IntType, {"!reg", varName, varName});
 
     return 0;
 }
