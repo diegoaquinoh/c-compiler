@@ -94,8 +94,21 @@ void IRInstr::gen_x86(ostream &o) {
             o << "    movl %eax, " << index1 << "(%rbp)" << endl;
 
             break;
-        case IRInstr::rtrn: 
-            o << "";
+        case IRInstr::sub:
+            // var1 = var2 - var3
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    subl " << index3 << "(%rbp), %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
             break;
         default:
             break;
