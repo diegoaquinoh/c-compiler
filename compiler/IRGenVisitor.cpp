@@ -37,7 +37,7 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 
     if (ctx->expr()) {
         this->visit(ctx->expr());
-        cout << "    movl %eax, " << offset << "(%rbp)\n";
+        this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg!"});
     }
 
     return 0;
@@ -50,7 +50,7 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 
     this->visit(ctx->expr());
 
-    this->IR.createBasicBlock->add_instr(IRInstr::copy, IntType, {varName, "!reg!"});
+    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg!"});
 
     return 0;
 }
@@ -58,15 +58,18 @@ antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
     int val = stoi(ctx->CONST()->getText());
-    cout << "    movl $" << val << ", %eax\n";
+    string varName = IRGenVisitor::createVariableTmp();
+
+    this->IR->cfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, {varName, "!reg"});
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 {
-    int offsetSrc = symbolTable[ctx->VAR()->getText()];
-    cout << "    movl " << offsetSrc << "(%rbp), %eax\n";
+    string varName = ctx->VAR()->getText();
+
+    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {varName, "!reg"});
 
     return 0;
 }
@@ -83,26 +86,15 @@ antlrcpp::Any IRGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
     auto op = ctx->OP->getText();
     this->visit(ctx->expr(0));
 
-    auto indexTmp = createVariableTmp();
+    string indexTmp = createVariableTmp();
+    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {"!reg", indexTmp});
     
     this->visit(ctx->expr(1));
-
+    
     if (op == "*") {
-        std::cout << "    imull " << indexTmp << "(%rbp), %eax\n";
+        this->IR->cfg->current_bb->add_IRInstr(IRInstr::mul, IntType, {"!reg", indexTmp, "!reg"});
     } else {
- 
-        // On met la DROITE (numérateur) dans %ecx
-        std::cout << "    movl %eax, %ecx\n";
-        
-        // On met la GAUCHE (dénominateur) dans %eax
-        std::cout << "    movl " << indexTmp << "(%rbp), %eax\n";
-
-        // Extension de signe (Obligatoire pour idivl)
-        // Étend le signe de %eax vers %edx pour former le nombre 64 bits %edx:%eax
-        std::cout << "    cltd\n";
-
-        // % eax =  (%edx:%eax) / %ecx
-        std::cout << "    idivl %ecx\n";
+        this->IR->cfg->current_bb->add_IRInstr(IRInstr::div, IntType, {"!reg", indexTmp, "!reg"});
     }
 
     return 0;
@@ -114,6 +106,7 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     this->visit(ctx->expr(0));
 
     string indexTmp = createVariableTmp();
+    this->IR->cfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {"!reg", indexTmp});
     
     this->visit(ctx->expr(1));
 
