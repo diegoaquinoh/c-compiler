@@ -46,7 +46,7 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
     return 0;
 }
 
-antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx)
+antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 {
     string varName = ctx->VAR()->getText();
 
@@ -254,27 +254,23 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
 }
 
 
-antlrcpp::Any IRGenVisitor::visitCall_stmt(ifccParser::Call_stmtContext *ctx) {
+antlrcpp::Any IRGenVisitor::visitCallStmt(ifccParser::CallStmtContext *ctx) {
     string funcName = ctx->VAR()->getText();
     auto args = ctx->expr();
-    
-    // 1. Evaluate each arg and save to temp stack slots
+
     vector<string> varTempNames;
     for (auto *arg : args) {
-        this->visit(arg);              
+        this->visit(arg);
         string varTempName = createVariableTmp();
         vector<string> v = {varTempName, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
         varTempNames.push_back(varTempName);
     }
 
-    // 2. Generate call instruction with the function name and the temp stack slots as arguments
     vector<string> v = {reg, funcName};
     v.insert(v.end(), varTempNames.begin(), varTempNames.end());
-
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, v);
 
-    
     return 0;
 }
 

@@ -53,7 +53,7 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *c
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx) {
+antlrcpp::Any SymbolTableVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx) {
     useVar(ctx->VAR()->getText());
     if (ctx->expr()) {
         this->visit(ctx->expr());
@@ -89,8 +89,7 @@ antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitCall_stmt(ifccParser::Call_stmtContext *ctx) {
-    // Reuse funcCall validation logic: check function name, arg count, visit args
+antlrcpp::Any SymbolTableVisitor::visitCallStmt(ifccParser::CallStmtContext *ctx) {
     string funcName = ctx->VAR()->getText();
     if (!knownFunctions.count(funcName)) {
         cerr << "error: function '" << funcName << "' called but not declared\n";

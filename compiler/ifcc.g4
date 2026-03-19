@@ -4,14 +4,14 @@ axiom : prog EOF ;
 
 prog : 'int' 'main' '(' ')' '{' stmt* return_stmt '}' ;
 
-stmt : decl_stmt | affect_stmt | if_stmt | call_stmt ;
+stmt : decl_stmt | var_action | if_stmt ;
 
 decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
 decl_item : VAR ('=' expr)? ;
 
-affect_stmt: VAR '=' expr ';' ;
-
-call_stmt: VAR '(' (expr (',' expr)*)? ')' ;
+var_action : VAR '=' expr ';'                       # affectStmt
+           | VAR '(' (expr (',' expr)*)? ')' ';'    # callStmt
+           ;
 
 if_stmt: 'if' expr '{' stmt* '}' (else_stmt)? ;
 else_stmt: 'else' '{' stmt* '}' ;
