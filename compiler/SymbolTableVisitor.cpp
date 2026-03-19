@@ -9,6 +9,7 @@ int SymbolTableVisitor::declareVar(const std::string &name) {
     }
     nextIndex -= 4;
     symbolTable[name] = nextIndex;
+    symbolType[name] = IntType;
     return nextIndex;
 }
 

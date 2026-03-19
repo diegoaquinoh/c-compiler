@@ -2,6 +2,7 @@
 
 #include "antlr4-runtime.h"
 #include "generated/ifccBaseVisitor.h"
+#include "Type.h"
 #include <map>
 #include <set>
 #include <string>
@@ -39,8 +40,10 @@ class SymbolTableVisitor: public ifccBaseVisitor {
 
         map<string, int> getSymbolTable() const { return symbolTable; }
         bool hasError() const { return errorFlag; }
+
     private:
         map<string, int> symbolTable;
+        map<string,Type> symbolType;
         set<string> usedVars;
         int nextIndex = -4;
         bool errorFlag = false;
