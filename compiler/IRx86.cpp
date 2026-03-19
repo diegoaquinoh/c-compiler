@@ -35,8 +35,9 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     o << "    movq %rsp, %rbp\n";
 
     int stackSize = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
-    if (stackSize > 0) {
-        o << "    subq $" << stackSize << ", %rsp\n";
+    int allocSize = (stackSize + 64 + 15) & ~15;
+    if (allocSize > 0) {
+        o << "    subq $" << allocSize << ", %rsp\n";
     }
 
     o << "    movl $0, -4(%rbp)\n";
