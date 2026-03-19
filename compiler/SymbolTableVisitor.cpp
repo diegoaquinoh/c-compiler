@@ -27,7 +27,6 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
     for (auto *stmt : ctx->stmt()) {
         this->visit(stmt);
     }
-    this->visit(ctx->return_stmt());
 
     // Check that every declared variable is used at least once
     for (auto &[name, idx] : symbolTable) {
