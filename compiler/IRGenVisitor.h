@@ -23,6 +23,8 @@ class IRGenVisitor : public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitAffect_stmt(ifccParser::Affect_stmtContext *ctx) override;
         
+        virtual antlrcpp::Any visitIf_stmt(ifccParser::If_stmtContext *ctx) override;
+        virtual antlrcpp::Any visitElse_stmt(ifccParser::Else_stmtContext *ctx) override;
         // Expression visitors
         virtual antlrcpp::Any visitNegative(ifccParser::NegativeContext *ctx) override;
         virtual antlrcpp::Any visitParens(ifccParser::ParensContext *ctx) override;

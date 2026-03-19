@@ -78,6 +78,53 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
     return 0;
 }
 
+antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
+{
+
+    CFG *cfg = this->ir.currentCfg;
+    BasicBlock *trueBB = new BasicBlock(cfg, cfg->new_BB_name() + "_true");
+    BasicBlock *nextBB = new BasicBlock(cfg, cfg->new_BB_name() + "_next");
+
+
+    BasicBlock *elseBB = nullptr;
+    if (ctx->else_stmt()) {
+        elseBB = new BasicBlock(cfg, cfg->new_BB_name() + "_else");
+    }
+
+
+
+    BasicBlock* currentBB = cfg->current_bb;
+    currentBB->exit_true = trueBB;
+    currentBB->exit_false = (elseBB != nullptr) ? elseBB : nextBB;
+
+    cfg->add_bb(trueBB);
+
+    this->visit(ctx->expr());
+
+    for (auto stmt : ctx->stmt()) {
+        this->visit(stmt);
+        this->ir.currentCfg->current_bb->exit_true = nextBB;
+    }
+
+    if (elseBB) {
+        cfg->add_bb(elseBB);
+        this->visit(ctx->else_stmt());
+        this->ir.currentCfg->current_bb->exit_true = nextBB;
+    }
+
+    cfg->add_bb(nextBB);
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
+{
+    for (auto stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    return 0;
+}
+
+
 antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
     this->visit(ctx->expr());

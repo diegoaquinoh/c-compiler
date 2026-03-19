@@ -123,12 +123,12 @@ class BasicBlock {
 class CFG {
  public:
 	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(0), nextBBnumber(0) {
-		add_bb(new BasicBlock(this, "main"));
+		this->current_bb = nullptr;
 	};
 
 	IR* ast; /**< The AST this CFG comes from */
 	
-	void add_bb(BasicBlock* bb); 
+	void add_bb(BasicBlock* bb);
 
 	// x86 code generation: could be encapsulated in a processor class in a retargetable compiler
 	void gen_x86(ostream& o);
