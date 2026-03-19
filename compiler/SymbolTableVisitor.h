@@ -22,7 +22,6 @@ class SymbolTableVisitor: public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override ;
 
-        virtual antlrcpp::Any visitCallStmt(ifccParser::CallStmtContext *ctx) override;
         virtual antlrcpp::Any visitFuncCall(ifccParser::FuncCallContext *ctx) override;
 
         
