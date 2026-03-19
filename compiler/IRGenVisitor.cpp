@@ -254,7 +254,7 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
 }
 
 
-antlrcpp::Any IRGenVisitor::visitCallStmt(ifccParser::CallStmtContext *ctx) {
+antlrcpp::Any IRGenVisitor::visitCall_stmt(ifccParser::Call_stmtContext *ctx) {
     string funcName = ctx->VAR()->getText();
     auto args = ctx->expr();
     
