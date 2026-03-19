@@ -12,12 +12,25 @@ antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Prologue:
 
     // Visit all statements
-    for (auto *stmt : ctx->stmt()) {
+    auto statements = ctx->stmt();
+    for (auto *stmt : statements) {
         this->visit(stmt);
+        if (this->ir.currentCfg->current_bb->has_return) {
+            break;
+        }
     }
 
-    // Visit return statement
-    this->visit(ctx->return_stmt());
+    // `main` implicitly returns 0 only if control can still reach the end.
+    if (!this->ir.currentCfg->current_bb->has_return) {
+        vector<string> loadZero = {reg, "0"};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, loadZero);
+
+        vector<string> retZero = {reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, retZero);
+        this->ir.currentCfg->current_bb->has_return = true;
+        this->ir.currentCfg->current_bb->exit_true = nullptr;
+        this->ir.currentCfg->current_bb->exit_false = nullptr;
+    }
 
     // Epilogue:
     
@@ -46,7 +59,7 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
     return 0;
 }
 
-antlrcpp::Any IRGenVisitor::visitAffect_stmt(ifccParser::Affect_stmtContext *ctx)
+antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 {
     string varName = ctx->VAR()->getText();
 
@@ -101,13 +114,18 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
+        if (this->ir.currentCfg->current_bb->has_return) {
+            break;
+        }
         this->ir.currentCfg->current_bb->exit_true = nextBB;
     }
 
     if (elseBB) {
         cfg->add_bb(elseBB);
         this->visit(ctx->else_stmt());
-        this->ir.currentCfg->current_bb->exit_true = nextBB;
+        if (!this->ir.currentCfg->current_bb->has_return) {
+            this->ir.currentCfg->current_bb->exit_true = nextBB;
+        }
     }
 
     cfg->current_bb = nextBB;
@@ -119,6 +137,9 @@ antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
 {
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
+        if (this->ir.currentCfg->current_bb->has_return) {
+            break;
+        }
     }
     return 0;
 }
@@ -129,7 +150,9 @@ antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx
     this->visit(ctx->expr());
     vector<string> v = {reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, v);
-
+    this->ir.currentCfg->current_bb->has_return = true;
+    this->ir.currentCfg->current_bb->exit_true = nullptr;
+    this->ir.currentCfg->current_bb->exit_false = nullptr;
     return 0;
 }
 
@@ -229,6 +252,30 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
     vector<string> v2 = {reg, varName, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bor, IntType, v2);
 
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
+    string funcName = ctx->VAR()->getText();
+    auto args = ctx->expr();
+    
+    // 1. Evaluate each arg and save to temp stack slots
+    vector<string> varTempNames;
+    for (auto *arg : args) {
+        this->visit(arg);              
+        string varTempName = createVariableTmp();
+        vector<string> v = {varTempName, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+        varTempNames.push_back(varTempName);
+    }
+
+    // 2. Generate call instruction with the function name and the temp stack slots as arguments
+    vector<string> v = {reg, funcName};
+    v.insert(v.end(), varTempNames.begin(), varTempNames.end());
+
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, v);
+
+    
     return 0;
 }
 

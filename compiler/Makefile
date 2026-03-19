@@ -22,7 +22,8 @@ OBJECTS=build/ifccBaseVisitor.o \
 	build/IRGenVisitor.o \
 	build/SymbolTableVisitor.o \
 	build/IRcore.o \
-	build/IRx86.o
+	build/IRx86.o \
+	build/IRarm.o
 
 ifcc: $(OBJECTS)
 	@mkdir -p build
