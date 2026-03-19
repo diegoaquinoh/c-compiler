@@ -136,6 +136,7 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar1 = this->params.at(0);
             index1 = this->bb->cfg->get_var_index(nameVar1);
             o <<"    negl "<< index1 <<"(%rbp)\n";
+            break;
         case IRInstr::mul:
             // var1 = var2 * var3
             nameVar1 = this->params.at(0);
