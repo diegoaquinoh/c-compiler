@@ -14,6 +14,10 @@ void IR::gen_x86(ostream &o) {
         cfg->gen_x86(o);
         cfg->gen_x86_epilogue(o);
     }
+
+    this->currentCfg->gen_x86_prologue(o, "main");
+    this->currentCfg->gen_x86(o);
+    this->currentCfg->gen_x86_epilogue(o);
 }
 
 // CFG // 

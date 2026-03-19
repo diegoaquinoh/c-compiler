@@ -59,8 +59,8 @@ int main(int argn, const char **argv)
   }
 
   // Second Visitor: generate code using the symbol table
- // IRGenVisitor v(stv.getSymbolTable());
- // v.visit(tree);
+  IRGenVisitor v(stv.getSymbolTable());
+  v.visit(tree);
 
   // Temporaire : On définit une IR en dur pour générer le reste
 
@@ -72,7 +72,7 @@ int main(int argn, const char **argv)
 // bb.add_IRInstr(IRInstr::add, IntType, {"var3", "var1", "var2"});
 // bb.gen_x86(std::cout);
 
-IR ir;
+/* IR ir;
 CFG cfg(&ir);
 string name = cfg.new_BB_name();
 BasicBlock bb(&cfg, name);
@@ -83,13 +83,13 @@ bb.add_IRInstr(IRInstr::neg, IntType, {"var3"});
 bb.add_IRInstr(IRInstr::rtrn, IntType, {"var3"});
 cfg.add_bb(&bb);
 ir.cfgsMap.insert({"main", &cfg});
-ir.gen_x86(std::cout); 
+ir.gen_x86(std::cout);  */
 
  // v.visit(tree);  
 
-//  v.getIR().toString();
+  // std::cout << v.getIR().toString();
 
-  //v.getIR().gen_x86(std::cout);
+  // v.getIR().gen_x86(std::cout);
 
   return 0;
 }
