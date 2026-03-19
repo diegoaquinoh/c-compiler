@@ -12,12 +12,7 @@ void IR::gen_x86(ostream &o) {
 
         cfg->gen_x86_prologue(o, functionName);
         cfg->gen_x86(o);
-        cfg->gen_x86_epilogue(o);
     }
-
-    this->currentCfg->gen_x86_prologue(o, "main");
-    this->currentCfg->gen_x86(o);
-    this->currentCfg->gen_x86_epilogue(o);
 }
 
 // CFG // 
@@ -42,18 +37,34 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     o << "    movl $0, -4(%rbp)\n";
 }
 
-void CFG::gen_x86_epilogue(ostream &o){
-    o << "    movq %rbp, %rsp\n";
-    o << "    popq %rbp\n";
-    o << "    retq\n";
-}
-
-// BasicBlock // 
+// BasicBlock //
 
 void BasicBlock::gen_x86(ostream &o) {
+    // create a label for this block
+    o << this->label << ":\n";
+
+    // Emit instructions
     for (auto instr : this->instrs) {
         instr->gen_x86(o);
     }
+
+    // Epilogue : we end execution
+    if (this->exit_true == nullptr) {
+        o << "    movq %rbp, %rsp\n";
+        o << "    popq %rbp\n";
+        o << "    retq\n";
+        return;
+    }
+
+    // Test whether the block ended with a conditional, and if so, emit the appropriate jump
+    // For while and ifs, we have a false exit that is not null
+    if (this->exit_false !=  nullptr) {
+        o << "    cmpl $0, " << " %eax" << "\n";
+        o << "    je " << this->exit_false->label << "\n";
+    }
+
+    o << "    jmp " << this->exit_true->label << "\n";
+
 }
 
 void CFG::gen_x86(ostream &o) {
@@ -69,15 +80,20 @@ void IRInstr::gen_x86(ostream &o) {
     int index1, index2, index3;
     switch(this->op) {
         case IRInstr::ldconst:
-            // var1 = const
             nameVar1 = this->params.at(0);
             nb = stoi(this->params.at(1));
+            if(nameVar1 == "!reg")
+            {
+                o <<"   movl $" << nb << ", %eax\n";
+            }
+            else {
+                this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+                index1 = this->bb->cfg->get_var_index(nameVar1);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
+                o << "    movl $" << nb << ", " << index1 << "(%rbp)\n";
+            }
 
-            o << "    movl $" << nb << ", " << index1 << "(%rbp)\n";
             break;
         case IRInstr::add:
             // var1 = var2 + var3

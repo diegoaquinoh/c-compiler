@@ -17,6 +17,8 @@ IR::IR() {
     this->currentCfg->add_bb(body);
     this->currentCfg->add_bb(epilogue);
     this->currentCfg->current_bb = body;
+
+    cfgsMap["main"] = this->currentCfg;
 }
 
 // IR::~IR() {
@@ -91,6 +93,11 @@ void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> param
     IRInstr * nouvInstr = new IRInstr(this, op, t, params);
     this->instrs.push_back(nouvInstr);
 }
+void BasicBlock::add_IRInstr(IRInstr::Operation op) {
+    IRInstr * nouvInstr = new IRInstr(this, op);
+    this->instrs.push_back(nouvInstr);
+}
+
 
 // Print operations
 static const char* opToString(IRInstr::Operation op) {
@@ -133,9 +140,7 @@ string BasicBlock::toString() const {
     }
     oss << "  exit_true=" << (exit_true ? exit_true->label : "null")
         << " exit_false=" << (exit_false ? exit_false->label : "null") << "\n";
-    if (!test_var_name.empty()) {
-        oss << "  test_var=" << test_var_name << "\n";
-    }
+
     return oss.str();
 }
 
@@ -162,7 +167,6 @@ string IR::toString() const {
             oss << "  <null CFG>\n";
         }
     }
-    oss << this->currentCfg->toString();
     return oss.str();
 }
 
