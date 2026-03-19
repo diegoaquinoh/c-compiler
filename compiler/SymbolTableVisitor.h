@@ -22,6 +22,9 @@ class SymbolTableVisitor: public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override ;
 
+        //virtual antlrcpp::Any visitCallStmt(ifccParser::CallStmtContext *ctx) override ;
+        //virtual antlrcpp::Any visitFuncCall(ifccParser::FuncCallContext *ctx) override ;
+
         
         virtual antlrcpp::Any visitNegative(ifccParser::NegativeContext *ctx) override;
         virtual antlrcpp::Any visitParens(ifccParser::ParensContext *ctx) override;
@@ -44,4 +47,6 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         set<string> usedVars;
         int nextIndex = -4;
         bool errorFlag = false;
+        set<string> knownFunctions = {"putchar", "getchar"};
+        map<string, int> functionArgCount = {{"putchar", 1}, {"getchar", 0}};
 };

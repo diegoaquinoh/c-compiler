@@ -101,7 +101,7 @@ class BasicBlock {
 	string label; /**< label of the BB, also will be the label in the generated code */
 	CFG* cfg; /** < the CFG where this block belongs */
 	vector<IRInstr*> instrs; /** < the instructions themselves. */
-  string test_var_name;  /** < when generating IR code for an if(expr) or while(expr) etc,
+  	string test_var_name;  /** < when generating IR code for an if(expr) or while(expr) etc,
 													 store here the name of the variable that holds the value of expr */
  protected:
 
@@ -134,7 +134,7 @@ class CFG {
 	void gen_x86(ostream& o);
 	string toString() const;
 	string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
-	void gen_x86_prologue(ostream& o);
+	void gen_x86_prologue(ostream& o, const string& functionName);
 	void gen_x86_epilogue(ostream& o);
 
 	// symbol table methods

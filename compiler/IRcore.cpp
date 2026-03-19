@@ -62,11 +62,11 @@ string CFG::create_new_tempvar(Type t){
 }
 
 int CFG::get_var_index(string name){
-    return this->SymbolIndex[name];
+    return this->SymbolIndex.at(name);
 }
 
 Type CFG::get_var_type(string name){
-    return this->SymbolType[name];
+    return this->SymbolType.at(name);
 }
 
 string CFG::new_BB_name(){
@@ -87,6 +87,10 @@ BasicBlock::BasicBlock(CFG* cfg, string entry_label) {
     this->exit_false = nullptr;
 }
 
+void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> params) {
+    IRInstr * nouvInstr = new IRInstr(this, op, t, params);
+    this->instrs.push_back(nouvInstr);
+}
 
 // Print operations
 static const char* opToString(IRInstr::Operation op) {

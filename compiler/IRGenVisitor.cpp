@@ -4,14 +4,13 @@ using namespace std;
 string reg = "!reg";
 
 string IRGenVisitor::createVariableTmp() {
-    string tmpName = "!tmp" + to_string(cptTempVariables++);
-    int offset = -4 * cptTempVariables;
-    symbolTable[tmpName] = offset;
-    return tmpName;
+    return "!tmp" + to_string(cptTempVariables++);
 }
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
+    // Prologue:
+
     // Visit all statements
     for (auto *stmt : ctx->stmt()) {
         this->visit(stmt);
@@ -20,6 +19,8 @@ antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Visit return statement
     this->visit(ctx->return_stmt());
 
+    // Epilogue:
+    
 
     return 0;
 }
@@ -35,7 +36,6 @@ antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
     string varName = ctx->VAR()->getText();
-    int offset = symbolTable[varName];
 
     if (ctx->expr()) {
         this->visit(ctx->expr());
@@ -83,7 +83,8 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 
     CFG *cfg = this->ir.currentCfg;
     BasicBlock *trueBB = new BasicBlock(cfg, cfg->new_BB_name() + "_true");
-    BasicBlock *nextBB = new BasicBlock(cfg, cfg->new_BB_name() + "_next");
+    BasicBlock *nextBB = this->ir.currentCfg->current_bb->exit_true;
+    BasicBlock* currentBB = cfg->current_bb;
 
 
     BasicBlock *elseBB = nullptr;
@@ -91,15 +92,12 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
         elseBB = new BasicBlock(cfg, cfg->new_BB_name() + "_else");
     }
 
-
-
-    BasicBlock* currentBB = cfg->current_bb;
     currentBB->exit_true = trueBB;
     currentBB->exit_false = (elseBB != nullptr) ? elseBB : nextBB;
 
-    cfg->add_bb(trueBB);
-
     this->visit(ctx->expr());
+
+    cfg->add_bb(trueBB);
 
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
@@ -112,7 +110,8 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
         this->ir.currentCfg->current_bb->exit_true = nextBB;
     }
 
-    cfg->add_bb(nextBB);
+    cfg->current_bb = nextBB;
+
     return 0;
 }
 
@@ -128,6 +127,8 @@ antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
 antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
     this->visit(ctx->expr());
+    vector<string> v = {reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, v);
 
     return 0;
 }
@@ -195,7 +196,7 @@ antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, varName};
+    vector<string> v2 = {reg, varName, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::band, IntType, v2);
 
     return 0;
@@ -208,7 +209,7 @@ antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, varName};
+    vector<string> v2 = {reg, varName, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bxor, IntType, v2);
 
     return 0;
@@ -222,7 +223,7 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, varName};
+    vector<string> v2 = {reg, varName, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bor, IntType, v2);
 
     return 0;

@@ -17,9 +17,11 @@ else_stmt: 'else' '{' stmt* '}' ;
 return_stmt : RETURN expr ';' ;
 
 
-expr : '(' expr ')'            # parens
+expr : VAR '(' (expr (',' expr)*)? ')' # funcCall
+     | '(' expr ')'            # parens
      |'-' expr                 # negative
-     | expr OP=('*'|'/') expr  # multdiv
+     |'!' expr                 # logicalnot
+     | expr OP=('*'|'/'|'%') expr  # multdiv
      | expr OP=('+'|'-') expr  # addsub
      | expr '&' expr           # bitwiseand
      | expr '^' expr           # bitwisexor
