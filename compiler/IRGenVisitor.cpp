@@ -4,10 +4,7 @@ using namespace std;
 string reg = "!reg";
 
 string IRGenVisitor::createVariableTmp() {
-    string tmpName = "!tmp" + to_string(cptTempVariables++);
-    int offset = -4 * cptTempVariables;
-    symbolTable[tmpName] = offset;
-    return tmpName;
+    return "!tmp" + to_string(cptTempVariables++);
 }
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
@@ -35,7 +32,6 @@ antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
     string varName = ctx->VAR()->getText();
-    int offset = symbolTable[varName];
 
     if (ctx->expr()) {
         this->visit(ctx->expr());
