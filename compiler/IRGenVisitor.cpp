@@ -91,7 +91,7 @@ antlrcpp::Any IRGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
     this->visit(ctx->expr(0));
 
     string indexTmp = createVariableTmp();
-    vector<string> v = {reg, indexTmp};
+    vector<string> v = {indexTmp, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     
     this->visit(ctx->expr(1));
@@ -113,7 +113,7 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     this->visit(ctx->expr(0));
 
     string indexTmp = createVariableTmp();
-    vector<string> v = {reg, indexTmp};
+    vector<string> v = {indexTmp, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     
     this->visit(ctx->expr(1));
