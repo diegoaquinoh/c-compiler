@@ -41,6 +41,8 @@ class IRGenVisitor : public ifccBaseVisitor {
         virtual antlrcpp::Any visitBitwisexor(ifccParser::BitwisexorContext *ctx) override;
         virtual antlrcpp::Any visitBitwiseor(ifccParser::BitwiseorContext *ctx) override;
 
+        virtual antlrcpp::Any visitFuncCall(ifccParser::FuncCallContext *ctx) override;
+
 //        virtual antlrcpp::Any visitLogicalnot(ifccParser::LogicalnotContext *ctx) override;
 
         // Return statement visitor
