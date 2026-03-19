@@ -2,14 +2,14 @@ grammar ifcc;
 
 axiom : prog EOF ;
 
-prog : 'int' 'main' '(' ')' '{' stmt* return_stmt '}' ;
+prog : 'int' 'main' '(' ')' '{' stmt* '}' ;
 
-stmt : decl_stmt | expr ';' | if_stmt ;
+stmt : decl_stmt | expr ';' | if_stmt | return_stmt;
 
 decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
 decl_item : VAR ('=' expr)? ;
 
-if_stmt: 'if' expr '{' stmt* '}' (else_stmt)? ;
+if_stmt: 'if' '(' expr ')' '{' stmt* '}' (else_stmt)? ;
 else_stmt: 'else' '{' stmt* '}' ;
 
 return_stmt : RETURN expr ';' ;
