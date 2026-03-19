@@ -89,8 +89,8 @@ ir.gen_x86(std::cout);  */
 
   // std::cout << v.getIR().toString();
 
-  // v.getIR().gen_x86(std::cout);
-  cout << v.getIR().toString();
+  v.getIR().gen_x86(std::cout);
+  //cout << v.getIR().toString();
 
   return 0;
 }
