@@ -28,7 +28,9 @@ class IRInstr {
 		sub,
 		mul,
 		div,
+		mod,
 		neg, // -(1) => neg var1 => var1 = -var1
+		lnot,
 		rmem,
 		wmem,
 		call,

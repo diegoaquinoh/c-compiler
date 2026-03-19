@@ -19,7 +19,7 @@ return_stmt : RETURN expr ';' ;
 
 expr : VAR '(' (expr (',' expr)*)? ')' # funcCall
      | '(' expr ')'                          # parens
-|'-' expr                                    # negative
+     |'-' expr                               # negative
      |'!' expr                               # logicalnot
      | expr OP=('*'|'/'|'%') expr            # multdiv
      | expr OP=('+'|'-') expr                # addsub
