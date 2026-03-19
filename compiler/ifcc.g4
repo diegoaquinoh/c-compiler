@@ -18,16 +18,18 @@ return_stmt : RETURN expr ';' ;
 
 
 expr : VAR '(' (expr (',' expr)*)? ')' # funcCall
-     | '(' expr ')'            # parens
-     |'-' expr                 # negative
-     |'!' expr                 # logicalnot
-     | expr OP=('*'|'/'|'%') expr  # multdiv
-     | expr OP=('+'|'-') expr  # addsub
-     | expr '&' expr           # bitwiseand
-     | expr '^' expr           # bitwisexor
-     | expr '|' expr           # bitwiseor
-     | CONST                   # const
-     | VAR                     # var
+     | '(' expr ')'                          # parens
+|'-' expr                                    # negative
+     |'!' expr                               # logicalnot
+     | expr OP=('*'|'/'|'%') expr            # multdiv
+     | expr OP=('+'|'-') expr                # addsub
+     | expr OP=('<'|'<='|'>'|'>=') expr      # relational
+     | expr OP=('=='|'!=') expr              # equality
+     | expr '&' expr                         # bitwiseand
+     | expr '^' expr                         # bitwisexor
+     | expr '|' expr                         # bitwiseor
+     | CONST                                 # const
+     | VAR                                   # var
      ;
 
 

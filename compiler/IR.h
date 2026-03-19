@@ -36,8 +36,11 @@ class IRInstr {
 		bor,
 		band,
 		cmp_eq,
+		cmp_ne,
 		cmp_lt,
 		cmp_le,
+		cmp_gt,
+		cmp_ge,
 		rtrn
 	} Operation;
 

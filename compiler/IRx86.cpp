@@ -209,6 +209,96 @@ void IRInstr::gen_x86(ostream &o) {
             o << "    andl " << index3 << "(%rbp), %eax" << endl;
             o << "    movl %eax, " << index1 << "(%rbp)" << endl;
             break;
+        case IRInstr::cmp_eq:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
+            o << "    sete  %al" << endl;
+            o << "    movzbl %al, %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            break;
+        case IRInstr::cmp_ne:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
+            o << "    setne %al" << endl;
+            o << "    movzbl %al, %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            break;
+        case IRInstr::cmp_lt:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
+            o << "    setl %al" << endl;
+            o << "    movzbl %al, %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            break;
+        case IRInstr::cmp_le:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
+            o << "    setle %al" << endl;
+            o << "    movzbl %al, %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            break;
+        case IRInstr::cmp_gt:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
+            o << "    setg %al" << endl;
+            o << "    movzbl %al, %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            break;
+        case IRInstr::cmp_ge:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            nameVar3 = this->params.at(2);
+
+            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index3 = this->bb->cfg->get_var_index(nameVar3);
+
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
+            o << "    setge %al" << endl;
+            o << "    movzbl %al, %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            break;
         default:
             break;
     }
