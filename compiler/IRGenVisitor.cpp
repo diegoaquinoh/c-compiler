@@ -147,9 +147,12 @@ antlrcpp::Any IRGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
     if (op == "*") {
         vector<string> v2 = {reg, indexTmp, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, v2);
-    } else {
+    } else if (op == "/") {
         vector<string> v3 = {reg, indexTmp, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::div, IntType, v3);
+    } else if (op == "%") {
+        vector<string> v4 = {reg, indexTmp, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mod, IntType, v4);
     }
 
     return 0;
@@ -299,5 +302,13 @@ antlrcpp::Any IRGenVisitor::visitEquality(ifccParser::EqualityContext *ctx){
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ne, IntType, v3);
     }
 
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx) {
+    this->visit(ctx->expr());
+    vector<string> v = {reg, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::lnot, IntType, v);
+    
     return 0;
 }
