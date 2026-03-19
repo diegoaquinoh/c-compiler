@@ -11,7 +11,7 @@ decl_item : VAR ('=' expr)? ;
 
 affect_stmt: VAR '=' expr ';' ;
 
-if_stmt: 'if' expr '{' stmt* '}' (else_stmt)? ;
+if_stmt: 'if' '(' expr ')' '{' stmt* '}' (else_stmt)? ;
 else_stmt: 'else' '{' stmt* '}' ;
 
 return_stmt : RETURN expr ';' ;

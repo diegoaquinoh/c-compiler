@@ -84,7 +84,12 @@ void IRInstr::gen_x86(ostream &o) {
             nb = stoi(this->params.at(1));
             if(nameVar1 == "!reg")
             {
-                o <<"   movl $" << nb << ", %eax\n";
+                // Keep the "!reg" pseudo-variable in sync with the register value.
+                this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+                index1 = this->bb->cfg->get_var_index(nameVar1);
+
+                o << "    movl $" << nb << ", %eax\n";
+                o << "    movl %eax, " << index1 << "(%rbp)\n";
             }
             else {
                 this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
@@ -128,19 +133,36 @@ void IRInstr::gen_x86(ostream &o) {
             o << "    subl " << index3 << "(%rbp), %eax" << endl;
             o << "    movl %eax, " << index1 << "(%rbp)" << endl;
             break;
-        case IRInstr::copy:
+        case IRInstr::copy: {
             // var1 = var2
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
 
-            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            bool destIsReg = (nameVar1 == "!reg");
+            bool srcIsReg = (nameVar2 == "!reg");
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
+            if (destIsReg) {
+                if (!srcIsReg) {
+                    index2 = this->bb->cfg->get_var_index(nameVar2);
+                    o << "    movl " << index2 << "(%rbp), %eax" << endl;
+                }
+                this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+                index1 = this->bb->cfg->get_var_index(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            } else {
+                this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+                index1 = this->bb->cfg->get_var_index(nameVar1);
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+                if (srcIsReg) {
+                    o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+                } else {
+                    index2 = this->bb->cfg->get_var_index(nameVar2);
+                    o << "    movl " << index2 << "(%rbp), %eax" << endl;
+                    o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+                }
+            }
             break;
+        }
         case IRInstr::rtrn:
             nameVar1 = this->params.at(0);
 
