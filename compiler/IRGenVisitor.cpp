@@ -4,7 +4,7 @@ using namespace std;
 string reg = "!reg";
 
 string IRGenVisitor::createVariableTmp() {
-    return tmpName = "!tmp" + to_string(cptTempVariables++);
+    return "!tmp" + to_string(cptTempVariables++);
 }
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
