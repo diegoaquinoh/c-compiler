@@ -4,14 +4,10 @@ axiom : prog EOF ;
 
 prog : 'int' 'main' '(' ')' '{' stmt* return_stmt '}' ;
 
-stmt : decl_stmt | var_action | if_stmt ;
+stmt : decl_stmt | expr ';' | if_stmt ;
 
 decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
 decl_item : VAR ('=' expr)? ;
-
-var_action : VAR '=' expr ';'                       # affectStmt
-           | VAR '(' (expr (',' expr)*)? ')' ';'    # callStmt
-           ;
 
 if_stmt: 'if' expr '{' stmt* '}' (else_stmt)? ;
 else_stmt: 'else' '{' stmt* '}' ;
@@ -31,6 +27,7 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | expr '|' expr                         # bitwiseor
      | CONST                                 # const
      | VAR                                   # var
+     | VAR '=' expr                          # affectStmt
      ;
 
 RETURN : 'return' ;

@@ -89,27 +89,6 @@ antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitCallStmt(ifccParser::CallStmtContext *ctx) {
-    string funcName = ctx->VAR()->getText();
-    if (!knownFunctions.count(funcName)) {
-        cerr << "error: function '" << funcName << "' called but not declared\n";
-        errorFlag = true;
-    }
-    int argCount = ctx->expr().size();
-    if (argCount > 6) {
-        cerr << "error: function '" << funcName << "' called with too many arguments (" << argCount << ")\n";
-        errorFlag = true;
-    } else if (knownFunctions.count(funcName) && argCount != functionArgCount[funcName]) {
-        cerr << "error: '" << funcName << "' expects " << functionArgCount[funcName]
-             << " arguments, got " << argCount << "\n";
-        errorFlag = true;
-    }
-    for (auto *arg : ctx->expr()) {
-        this->visit(arg);
-    }
-    return 0;
-}
-
 antlrcpp::Any SymbolTableVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
 {
     this->visit(ctx->expr(0));

@@ -253,27 +253,6 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     return 0;
 }
 
-
-antlrcpp::Any IRGenVisitor::visitCallStmt(ifccParser::CallStmtContext *ctx) {
-    string funcName = ctx->VAR()->getText();
-    auto args = ctx->expr();
-
-    vector<string> varTempNames;
-    for (auto *arg : args) {
-        this->visit(arg);
-        string varTempName = createVariableTmp();
-        vector<string> v = {varTempName, reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
-        varTempNames.push_back(varTempName);
-    }
-
-    vector<string> v = {reg, funcName};
-    v.insert(v.end(), varTempNames.begin(), varTempNames.end());
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, v);
-
-    return 0;
-}
-
 antlrcpp::Any IRGenVisitor::visitRelational(ifccParser::RelationalContext *ctx){
     auto op = ctx->OP->getText();
     this->visit(ctx->expr(0));
