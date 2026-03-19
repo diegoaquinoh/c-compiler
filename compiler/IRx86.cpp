@@ -35,8 +35,9 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     o << "    movq %rsp, %rbp\n";
 
     int stackSize = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
-    if (stackSize > 0) {
-        o << "    subq $" << stackSize << ", %rsp\n";
+    int allocSize = (stackSize + 64 + 15) & ~15;
+    if (allocSize > 0) {
+        o << "    subq $" << allocSize << ", %rsp\n";
     }
 
     o << "    movl $0, -4(%rbp)\n";
@@ -112,6 +113,33 @@ void IRInstr::gen_x86(ostream &o) {
             o << "    subl " << index3 << "(%rbp), %eax" << endl;
             o << "    movl %eax, " << index1 << "(%rbp)" << endl;
             break;
+
+        case IRInstr::call: {
+            string dest = this->params.at(0);
+            string funcName = this->params.at(1);
+
+            const char* argRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+
+            for (size_t i = 2; i < this->params.size(); i++) {
+                int argIndex = this->bb->cfg->get_var_index(this->params.at(i));
+                o << "    movl " << argIndex << "(%rbp), " << argRegs[i - 2] << endl;
+            }
+
+            // Zero %eax (required by ABI for variadic/external functions)
+            o << "    movl $0, %eax" << endl;
+
+            #ifdef __APPLE__
+                o << "    call _" << funcName << endl;
+            #else
+                o << "    call " << funcName << "@PLT" << endl;
+            #endif
+
+            // Store return value (%eax) into destination
+            this->bb->cfg->add_to_symbol_table(dest, this->t);
+            int destIndex = this->bb->cfg->get_var_index(dest);
+            o << "    movl %eax, " << destIndex << "(%rbp)" << endl;
+            break;
+        }
         case IRInstr::copy:
             // var1 = var2
             nameVar1 = this->params.at(0);
