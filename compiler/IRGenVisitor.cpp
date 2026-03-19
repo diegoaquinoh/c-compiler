@@ -81,6 +81,8 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
     this->visit(ctx->expr());
+    vector<string> v = {reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, v);
 
     return 0;
 }
@@ -148,7 +150,7 @@ antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, varName};
+    vector<string> v2 = {reg, varName, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::band, IntType, v2);
 
     return 0;
@@ -161,7 +163,7 @@ antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, varName};
+    vector<string> v2 = {reg, varName, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bxor, IntType, v2);
 
     return 0;
@@ -175,7 +177,7 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, varName};
+    vector<string> v2 = {reg, varName, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bor, IntType, v2);
 
     return 0;
