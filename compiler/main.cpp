@@ -62,7 +62,6 @@ int main(int argn, const char **argv)
   IRGenVisitor v(stv.getSymbolTable());
   v.visit(tree);
 
-<<<<<<< HEAD
   // Temporaire : On définit une IR en dur pour générer le reste
 
 // IR ir;
@@ -91,9 +90,7 @@ ir.gen_x86(std::cout);  */
   // std::cout << v.getIR().toString();
 
   // v.getIR().gen_x86(std::cout);
-=======
   cout << v.getIR().toString();
->>>>>>> features/IRGenerator
 
   return 0;
 }
