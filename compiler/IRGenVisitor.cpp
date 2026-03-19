@@ -178,3 +178,52 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
 
     return 0;
 }
+
+antlrcpp::Any IRGenVisitor::visitRelational(ifccParser::RelationalContext *ctx){
+    auto op = ctx->OP->getText();
+    this->visit(ctx->expr(0));
+
+    string indexTmp = createVariableTmp();
+    vector<string> v = {indexTmp, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    
+    this->visit(ctx->expr(1));
+
+    if (op == "<") {
+        vector<string> v2 = {string(reg), indexTmp, string(reg)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_lt, IntType, v2);
+    } else if (op == "<=") {
+        vector<string> v3 = {string(reg), indexTmp, string(reg)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_le, IntType, v3);
+    } else if (op == ">") {
+        vector<string> v4 = {string(reg), indexTmp, string(reg)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_gt, IntType, v4);
+    } else if (op == ">=") {
+        vector<string> v5 = {string(reg), indexTmp, string(reg)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ge, IntType, v5);
+    }
+
+    return 0;
+
+}
+
+antlrcpp::Any IRGenVisitor::visitEquality(ifccParser::EqualityContext *ctx){
+    auto op = ctx->OP->getText();
+    this->visit(ctx->expr(0));
+
+    string indexTmp = createVariableTmp();
+    vector<string> v = {indexTmp, reg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    
+    this->visit(ctx->expr(1));
+
+    if (op == "==") {
+        vector<string> v2 = {string(reg), indexTmp, string(reg)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_eq, IntType, v2);
+    } else if (op == "!=") {
+        vector<string> v3 = {string(reg), indexTmp, string(reg)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ne, IntType, v3);
+    }
+
+    return 0;
+}
