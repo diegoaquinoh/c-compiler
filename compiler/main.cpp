@@ -62,35 +62,7 @@ int main(int argn, const char **argv)
   IRGenVisitor v(stv.getSymbolTable());
   v.visit(tree);
 
-  // Temporaire : On définit une IR en dur pour générer le reste
-
-// IR ir;
-// CFG cfg(&ir);
-// BasicBlock bb(&cfg, "entry_label1");
-// bb.add_IRInstr(IRInstr::ldconst, IntType, {"var1", "4"});
-// bb.add_IRInstr(IRInstr::ldconst, IntType, {"var2", "6"});
-// bb.add_IRInstr(IRInstr::add, IntType, {"var3", "var1", "var2"});
-// bb.gen_x86(std::cout);
-
-/* IR ir;
-CFG cfg(&ir);
-string name = cfg.new_BB_name();
-BasicBlock bb(&cfg, name);
-bb.add_IRInstr(IRInstr::ldconst, IntType, {"var1", "4"});
-bb.add_IRInstr(IRInstr::ldconst, IntType, {"var2", "6"});
-bb.add_IRInstr(IRInstr::add, IntType, {"var3", "var1", "var2"});
-bb.add_IRInstr(IRInstr::neg, IntType, {"var3"});
-bb.add_IRInstr(IRInstr::rtrn, IntType, {"var3"});
-cfg.add_bb(&bb);
-ir.cfgsMap.insert({"main", &cfg});
-ir.gen_x86(std::cout);  */
-
- // v.visit(tree);  
-
-  // std::cout << v.getIR().toString();
-
   v.getIR().gen_x86(std::cout);
-  //cout << v.getIR().toString();
 
   return 0;
 }
