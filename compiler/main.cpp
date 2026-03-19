@@ -62,7 +62,7 @@ int main(int argn, const char **argv)
   IRGenVisitor v(stv.getSymbolTable());
   v.visit(tree);  
 
-  v.getIR().toString();
+  cout << v.getIR().toString();
 
   return 0;
 }
