@@ -18,11 +18,10 @@ else_stmt: 'else' '{' stmt* '}' ;
 
 return_stmt : RETURN expr ';' ;
 
-
-expr : VAR '(' (expr (',' expr)*)? ')' # funcCall
+expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | '(' expr ')'                          # parens
-|'-' expr                                    # negative
-     |'!' expr                               # logicalnot
+     | '-' expr                              # negative
+     | '!' expr                              # logicalnot
      | expr OP=('*'|'/'|'%') expr            # multdiv
      | expr OP=('+'|'-') expr                # addsub
      | expr OP=('<'|'<='|'>'|'>=') expr      # relational
@@ -33,7 +32,6 @@ expr : VAR '(' (expr (',' expr)*)? ')' # funcCall
      | CONST                                 # const
      | VAR                                   # var
      ;
-
 
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;

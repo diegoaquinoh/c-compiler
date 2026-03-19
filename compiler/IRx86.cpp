@@ -114,14 +114,11 @@ void IRInstr::gen_x86(ostream &o) {
             break;
 
         case IRInstr::call: {
-            // params: {dest, funcName, arg1, arg2, ...}
             string dest = this->params.at(0);
             string funcName = this->params.at(1);
 
-            // x86-64 ABI: first 6 integer args go in these registers
             const char* argRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 
-            // Load each argument into the corresponding register
             for (size_t i = 2; i < this->params.size(); i++) {
                 int argIndex = this->bb->cfg->get_var_index(this->params.at(i));
                 o << "    movl " << argIndex << "(%rbp), " << argRegs[i - 2] << endl;
@@ -130,7 +127,6 @@ void IRInstr::gen_x86(ostream &o) {
             // Zero %eax (required by ABI for variadic/external functions)
             o << "    movl $0, %eax" << endl;
 
-            // Call the function
             #ifdef __APPLE__
                 o << "    call _" << funcName << endl;
             #else
