@@ -180,3 +180,20 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
 
     return 0;
 }
+
+antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
+    string funcName = ctx->VAR()->getText();
+
+    vector<string> params;
+    for (auto *arg : ctx->expr()) {
+        this->visit(arg);
+        params.push_back(reg);
+    }
+
+    string tmpVar = createVariableTmp();
+    vector<string> v = {tmpVar, funcName};
+    v.insert(v.end(), params.begin(), params.end());
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, v);
+
+    return 0;
+}
