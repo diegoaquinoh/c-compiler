@@ -2,18 +2,19 @@
 
 #include "antlr4-runtime.h"
 #include "generated/ifccBaseVisitor.h"
+#include "IR.h" 
 #include <map>
 #include <string>
 #include <vector>
 using namespace std;
 
 
-class CodeGenVisitor : public ifccBaseVisitor {
+class IRGenVisitor : public ifccBaseVisitor {
 	public:
         map<string, int> symbolTable;
-        CodeGenVisitor(const map<string, int> &symTable) : symbolTable(symTable) {}
+        IRGenVisitor(const map<string, int> &symTable) : symbolTable(symTable) {}
 
-        virtual int createVariableTmp();
+        virtual string createVariableTmp();
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
 
@@ -45,7 +46,11 @@ class CodeGenVisitor : public ifccBaseVisitor {
         // Return statement visitor
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
 
+        IR getIR() const { return this->ir; }
+        
         private:
-                int cptVariables = 0;
-                int indexVariables;
+                int cptTempVariables = 0;
+                IR ir;
+
+
 };
