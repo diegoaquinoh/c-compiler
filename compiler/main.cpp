@@ -59,12 +59,12 @@ int main(int argn, const char **argv)
   }
 
   // Second Visitor: generate code using the symbol table
-  IRGenVisitor v(stv.getSymbolTable());
-  v.visit(tree);
+  //IRGenVisitor v(stv.getAllSymbolTables());
+  //v.visit(tree);
 
  // cout << v.getIR().toString();
 
-  v.getIR().gen_arm(std::cout);
+  //v.getIR().gen_arm(std::cout);
 
 //  v.getIR().gen_x86(std::cout);
   return 0;

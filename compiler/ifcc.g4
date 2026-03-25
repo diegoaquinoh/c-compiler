@@ -39,7 +39,7 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      ;
 
 RETURN : 'return' ;
-TYPE : 'int'
+TYPE : 'int' ;
 RET_TYPE: 'int' | 'void';
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
 CONST : [0-9]+ ;

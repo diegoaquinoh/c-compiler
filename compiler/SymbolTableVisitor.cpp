@@ -23,9 +23,10 @@ void SymbolTableVisitor::useVar(const std::string &funcName, const std::string &
 }
 
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
-    // Visit all statements and the return
-    for (auto *stmt : ctx->stmt()) {
-        this->visit(stmt);
+
+    //visit all function definitions to build symbol tables and check variable usage
+    for (auto *func : ctx->func_def()) {
+        this->visit(func);
     }
 
     // Check that every declared variable is used at least once
@@ -106,7 +107,7 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
     }
 
     this->visit(ctx->stmt());
-    
+
     currentFunction = "";
     return 0;
 }
