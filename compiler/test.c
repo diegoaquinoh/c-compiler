@@ -1,9 +1,8 @@
 int main() {
-    int x = 0;
-    if ((x = 1)) {
-        x = x + 1;
+    int a = 3;
+    if (a > 0) {
+        a = a - 1;
     } else {
-        x = 0;
+        a = a + 1;
     }
-    return x;
 }

@@ -113,47 +113,50 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 {
-
     CFG *cfg = this->ir.currentCfg;
+    
+    // Create necessary basic blocks
+    BasicBlock *testBB = cfg->current_bb;
     BasicBlock *trueBB = new BasicBlock(cfg, cfg->new_BB_name() + "_true");
-    BasicBlock *nextBB = this->ir.currentCfg->current_bb->exit_true;
-    BasicBlock* currentBB = cfg->current_bb;
-
-
+    BasicBlock *endBB = new BasicBlock(cfg, cfg->new_BB_name() + "_endif");
     BasicBlock *elseBB = nullptr;
+
     if (ctx->else_stmt()) {
         elseBB = new BasicBlock(cfg, cfg->new_BB_name() + "_else");
     }
 
-    currentBB->exit_true = trueBB;
-    currentBB->exit_false = (elseBB != nullptr) ? elseBB : nextBB;
-
+    // Evaluate the condition in the current block
     this->visit(ctx->expr());
 
-    cfg->add_bb(trueBB);
+    // Link testBB
+    testBB->exit_true = trueBB;
+    testBB->exit_false = elseBB ? elseBB : endBB;
 
+    // Build true branch
+    cfg->add_bb(trueBB);
+    cfg->current_bb = trueBB;
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
-        if (this->ir.currentCfg->current_bb) {
-            if (this->ir.currentCfg->current_bb->has_return) {
-            break;
-        }
-        this->ir.currentCfg->current_bb->exit_true = nextBB;
-        }
+    }
+    if (!cfg->current_bb->has_return) {
+        cfg->current_bb->exit_true = endBB;
+        cfg->current_bb->exit_false = nullptr;
     }
 
+    // Build else branch if it exists
     if (elseBB) {
         cfg->add_bb(elseBB);
+        cfg->current_bb = elseBB;
         this->visit(ctx->else_stmt());
-        
-        if (this->ir.currentCfg->current_bb) {
-            if (!this->ir.currentCfg->current_bb->has_return) {
-            this->ir.currentCfg->current_bb->exit_true = nextBB;
-        }
+        if (!cfg->current_bb->has_return) {
+            cfg->current_bb->exit_true = endBB;
+            cfg->current_bb->exit_false = nullptr;
         }
     }
 
-    cfg->current_bb = nextBB;
+    // Continue building in the endBB
+    cfg->add_bb(endBB);
+    cfg->current_bb = endBB;
 
     return 0;
 }
@@ -267,6 +270,47 @@ antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
     return 0;
 }
 
+antlrcpp::Any IRGenVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx) 
+{
+    CFG *cfg = this->ir.currentCfg;
+    
+    // Create necessary basic blocks
+    BasicBlock *condBB = new BasicBlock(cfg, cfg->new_BB_name() + "_cond");
+    BasicBlock *bodyBB = new BasicBlock(cfg, cfg->new_BB_name() + "_body");
+    BasicBlock *endBB = new BasicBlock(cfg, cfg->new_BB_name() + "_endwhile");
+
+    // Connect the current block to the condition block
+    cfg->current_bb->exit_true = condBB;
+    cfg->current_bb->exit_false = nullptr;
+
+    // Build condition block
+    cfg->add_bb(condBB);
+    cfg->current_bb = condBB;
+    this->visit(ctx->expr());
+    
+    // Condition block exits
+    condBB->exit_true = bodyBB;
+    condBB->exit_false = endBB;
+
+    // Build body block
+    cfg->add_bb(bodyBB);
+    cfg->current_bb = bodyBB;
+    for (auto stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    
+    // Loop back to condition
+    if (!cfg->current_bb->has_return) {
+        cfg->current_bb->exit_true = condBB;
+        cfg->current_bb->exit_false = nullptr;
+    }
+
+    // Continue building in the endBB
+    cfg->add_bb(endBB);
+    cfg->current_bb = endBB;
+
+    return 0;
+}
 antlrcpp::Any IRGenVisitor::visitBreak_stmt(ifccParser::Break_stmtContext *ctx)
 {
     BasicBlock *breakTarget = this->ir.currentCfg->get_break_target();

@@ -49,7 +49,9 @@ class IRGenVisitor : public ifccBaseVisitor {
         virtual antlrcpp::Any visitEquality(ifccParser::EqualityContext *ctx) override;
 
         virtual antlrcpp::Any visitLogicalnot(ifccParser::LogicalnotContext *ctx) override;
-        // Return statement visitor
+
+        virtual antlrcpp::Any visitWhile_stmt(ifccParser::While_stmtContext *ctx) override;
+
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
 
         IR& getIR() { return this->ir; }

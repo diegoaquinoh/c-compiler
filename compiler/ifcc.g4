@@ -9,6 +9,7 @@ stmt : decl_stmt
      | if_stmt
      | switch_stmt
      | break_stmt
+     | while_stmt
      | return_stmt
      ;
 
@@ -18,6 +19,7 @@ decl_item : VAR ('=' expr)? ;
 if_stmt: 'if' '(' expr ')' '{' stmt* '}' (else_stmt)? ;
 else_stmt: 'else' '{' stmt* '}' ;
 
+while_stmt: 'while' '(' expr ')' '{' stmt* '}' ;
 switch_stmt : 'switch' '(' expr ')' '{' switch_clause* '}' ;
 switch_clause : case_label stmt* | default_label stmt* ;
 case_label : 'case' case_value ':' ;
