@@ -39,14 +39,16 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | expr '&' expr                         # bitwiseand
      | expr '^' expr                         # bitwisexor
      | expr '|' expr                         # bitwiseor
-     | CONST                                 # const
-     | VAR                                   # var
      | VAR '=' expr                          # affectStmt
+     | CONST                                 # const
+     | CHAR_CONST                            # const
+     | VAR                                   # var
      ;
 
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
 CONST : [0-9]+ ;
+CHAR_CONST : '\'' ( '\\' . | ~['\\] ) '\'' ;
 COMMENT : '/*' .*? '*/' -> skip ;
 DIRECTIVE : '#' .*? '\n' -> skip ;
 WS    : [ \t\r\n] -> channel(HIDDEN) ;

@@ -77,11 +77,27 @@ antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
-    int val = stoi(ctx->CONST()->getText());
-
+    int val;
+    if (ctx->CONST()) {
+        val = stoi(ctx->CONST()->getText());
+    } else {
+        string token = ctx->CHAR_CONST()->getText(); // e.g. "'a'"
+        if (token[1] == '\\') {
+            switch(token[2]) {
+                case 'n':  val = '\n'; break;
+                case 't':  val = '\t'; break;
+                case 'r':  val = '\r'; break;
+                case '\\': val = '\\'; break;
+                case '\'': val = '\''; break;
+                case '0':  val = '\0'; break;
+                default:   val = token[2]; break;
+            }
+        } else {
+            val = token[1];
+        }
+    }
     vector<string> v = {reg, to_string(val)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
-
     return 0;
 }
 
@@ -118,17 +134,22 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
-        if (this->ir.currentCfg->current_bb->has_return) {
+        if (this->ir.currentCfg->current_bb) {
+            if (this->ir.currentCfg->current_bb->has_return) {
             break;
         }
         this->ir.currentCfg->current_bb->exit_true = nextBB;
+        }
     }
 
     if (elseBB) {
         cfg->add_bb(elseBB);
         this->visit(ctx->else_stmt());
-        if (!this->ir.currentCfg->current_bb->has_return) {
+        
+        if (this->ir.currentCfg->current_bb) {
+            if (!this->ir.currentCfg->current_bb->has_return) {
             this->ir.currentCfg->current_bb->exit_true = nextBB;
+        }
         }
     }
 
@@ -239,7 +260,7 @@ antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
 {
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
-        if (this->ir.currentCfg->current_bb->has_return) {
+        if (this->ir.currentCfg->current_bb && this->ir.currentCfg->current_bb->has_return) {
             break;
         }
     }

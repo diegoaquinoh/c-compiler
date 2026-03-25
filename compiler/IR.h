@@ -47,9 +47,9 @@ class IRInstr {
 	} Operation;
 
 
-	/**  constructor */
 	IRInstr(BasicBlock* bb_, Operation op, Type t, vector<string> params) : bb(bb_), op(op), t(t), params(params) {};
-	
+	IRInstr(BasicBlock* bb_, Operation op) : bb(bb_), op(op), t(Type::IntType), params({}) {};
+
 	/** Actual code generation */
 	void gen_x86(ostream &o); /**< x86 assembly code generation for this IR instruction */
 	void gen_arm(ostream &o);
@@ -101,8 +101,8 @@ class BasicBlock {
 	string toString() const;
 
 	void add_IRInstr(IRInstr::Operation op, Type t, vector<string> params);
+	void add_IRInstr(IRInstr::Operation op);
 
-	// No encapsulation whatsoever here. Feel free to do better.
 	BasicBlock* exit_true;  /**< pointer to the next basic block, true branch. If nullptr, return from procedure */ 
 	BasicBlock* exit_false; /**< pointer to the next basic block, false branch. If null_ptr, the basic block ends with an unconditional jump */
 	string label; /**< label of the BB, also will be the label in the generated code */
@@ -116,21 +116,9 @@ class BasicBlock {
  
 };
 
-
-
-
-/** The class for the control flow graph, also includes the symbol table */
-
-/* A few important comments:
-	 The entry block is the one with the same label as the AST function name.
-	   (it could be the first of bbs, or it could be defined by an attribute value)
-	 The exit block is the one with both exit pointers equal to nullptr.
-     (again it could be identified in a more explicit way)
-
- */
 class CFG {
  public:
-	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(0), nextBBnumber(0) {
+	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(-4), nextBBnumber(0) {
 		this->current_bb = nullptr;
 	};
 
