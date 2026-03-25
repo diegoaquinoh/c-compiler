@@ -158,7 +158,7 @@ antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
 {
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
-        if (this->ir.currentCfg->current_bb->has_return) {
+        if (this->ir.currentCfg->current_bb && this->ir.currentCfg->current_bb->has_return) {
             break;
         }
     }

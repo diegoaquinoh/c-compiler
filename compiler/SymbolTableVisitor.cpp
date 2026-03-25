@@ -60,6 +60,26 @@ antlrcpp::Any SymbolTableVisitor::visitAffectStmt(ifccParser::AffectStmtContext 
     return 0;
 }
 
+antlrcpp::Any SymbolTableVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx) {
+    this->visit(ctx->expr());
+
+    for (auto *s : ctx->stmt()) {
+        this->visit(s);
+    }
+    if (ctx->else_stmt()) {
+        this->visit(ctx->else_stmt());
+    }
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx) {
+    for (auto *s : ctx->stmt()) {
+        this->visit(s);
+    }
+    return 0;
+}
+
 antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
     if (ctx->expr()) {
         this->visit(ctx->expr());
