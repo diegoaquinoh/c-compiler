@@ -1,20 +1,20 @@
 #include "SymbolTableVisitor.h"
 using namespace std;
 
-int SymbolTableVisitor::declareVar(const std::string &name) {
-    if (symbolTable.count(name)) {
+int SymbolTableVisitor::declareVar(const std::string &funcName, const std::string &name) {
+    if (allSymbolTables[funcName].count(name)) {
         cerr << "error: variable '" << name << "' declared multiple times\n";
         errorFlag = true;
-        return symbolTable[name]; 
+        return allSymbolTables[funcName][name];
     }
     nextIndex -= 4;
-    symbolTable[name] = nextIndex;
-    symbolType[name] = IntType;
+    allSymbolTables[funcName][name] = nextIndex;
+    allSymbolTypes[funcName][name] = IntType;
     return nextIndex;
 }
 
-void SymbolTableVisitor::useVar(const std::string &name) {
-    if (!symbolTable.count(name)) {
+void SymbolTableVisitor::useVar(const std::string &funcName, const std::string &name) {
+    if (!allSymbolTables[funcName].count(name)) {
         cerr << "error: variable '" << name << "' used before declaration\n";
         errorFlag = true;
     } else {
@@ -29,9 +29,11 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
     }
 
     // Check that every declared variable is used at least once
-    for (auto &[name, idx] : symbolTable) {
-        if (!usedVars.count(name)) {
-            cerr << "warning: variable '" << name << "' declared but never used\n";
+    for (auto &funcTable : allSymbolTables) {
+        for (auto &[name, idx] : funcTable.second) {
+            if (!usedVars.count(name)) {
+                cerr << "warning: variable '" << name << "' declared but never used\n";
+            }
         }
     }
     return 0;
@@ -87,6 +89,28 @@ antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx
     }
     return 0;
 }
+
+antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx){
+    string funcName = ctx->VAR()->getText();
+    if (knownFunctions.count(funcName)) {
+        cerr << "error: function '" << funcName << "' already declared\n";
+        errorFlag = true;
+    }
+    currentFunction = funcName;
+    allSymbolTables[currentFunction] = {};
+    usedVars.clear();
+    nextIndex = -4;
+
+    for (auto *param : ctx->param_list()->VAR()) {
+        declareVar(funcName, param->getText());
+    }
+
+    this->visit(ctx->stmt());
+    
+    currentFunction = "";
+    return 0;
+}
+        
 
 antlrcpp::Any SymbolTableVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
 {

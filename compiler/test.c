@@ -1,5 +1,11 @@
 int main() {
-    int a = 0;
-    int b = 1;
-    return a > b;
+    int x = 1;
+    if (x) {
+        int a = 2; 
+        return a;
+    } else {
+        int a = 5;
+        return a;
+    }
+    return 0;
 }

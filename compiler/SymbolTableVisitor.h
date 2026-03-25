@@ -10,8 +10,8 @@ using namespace std;
 
 class SymbolTableVisitor: public ifccBaseVisitor {
     public:
-        int declareVar(const string &name);
-        void useVar(const string &name);
+        int declareVar(const std::string &funcName, const std::string &name);
+        void useVar(const std::string &funcName, const std::string &name);
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;
 
@@ -23,7 +23,7 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override ;
 
         virtual antlrcpp::Any visitFuncCall(ifccParser::FuncCallContext *ctx) override;
-
+        virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
         
         virtual antlrcpp::Any visitNegative(ifccParser::NegativeContext *ctx) override;
         virtual antlrcpp::Any visitParens(ifccParser::ParensContext *ctx) override;
@@ -36,13 +36,15 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         virtual antlrcpp::Any visitBitwiseand(ifccParser::BitwiseandContext *ctx) override;
         virtual antlrcpp::Any visitBitwisexor(ifccParser::BitwisexorContext *ctx) override;
         virtual antlrcpp::Any visitBitwiseor(ifccParser::BitwiseorContext *ctx) override;
+        
 
-        map<string, int> getSymbolTable() const { return symbolTable; }
+        map<string, map<string, int>> getAllSymbolTables() const { return allSymbolTables; }
         bool hasError() const { return errorFlag; }
 
     private:
-        map<string, int> symbolTable;
-        map<string,Type> symbolType;
+        map<string, map<string, int>> allSymbolTables;
+        string currentFunction;
+        map<string, map<string, Type>> allSymbolTypes;
         set<string> usedVars;
         int nextIndex = -4;
         bool errorFlag = false;
