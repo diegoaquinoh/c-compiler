@@ -9,8 +9,6 @@ stmt : decl_stmt | expr ';' | if_stmt | return_stmt;
 decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
 decl_item : VAR ('=' expr)? ;
 
-affect_stmt: VAR '=' expr ';' ;
-
 if_stmt: 'if' '(' expr ')' '{' stmt* '}' (else_stmt)? ;
 else_stmt: 'else' '{' stmt* '}' ;
 
