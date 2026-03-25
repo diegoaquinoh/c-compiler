@@ -80,6 +80,8 @@ int main(int argn, const char **argv)
   IRGenVisitor v(stv.getSymbolTable());
   v.visit(tree);
 
+  cout << v.SymbolIndex.size() << "variables déclarées ! " << endl;
+
   switch (archiCible) {
     case X86:
         v.getIR().gen_x86(std::cout);
