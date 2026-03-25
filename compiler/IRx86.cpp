@@ -17,6 +17,11 @@ void IR::gen_x86(ostream &o) {
 
 // CFG // 
 
+string CFG::IR_reg_to_asm(string reg) {
+    int index = this->get_var_index(reg);
+    return to_string(index) + "(%rbp)";
+}
+
 void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     #ifdef __APPLE__
         o << "    .globl _" << functionName << "\n";
@@ -41,10 +46,8 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
 // BasicBlock //
 
 void BasicBlock::gen_x86(ostream &o) {
-    // create a label for this block
     o << this->label << ":\n";
 
-    // Emit instructions
     for (auto instr : this->instrs) {
         instr->gen_x86(o);
     }
@@ -57,15 +60,14 @@ void BasicBlock::gen_x86(ostream &o) {
         return;
     }
 
-    // Test whether the block ended with a conditional, and if so, emit the appropriate jump
-    // For while and ifs, we have a false exit that is not null
-    if (this->exit_false !=  nullptr) {
-        o << "    cmpl $0, " << " %eax" << "\n";
-        o << "    je " << this->exit_false->label << "\n";
+    if (this->exit_false == nullptr) {
+        o << "    jmp " << this->exit_true->label << "\n";
+        return;
     }
 
+    o << "    cmpl $0, " << this->cfg->IR_reg_to_asm("!reg") << "\n";
+    o << "    je " << this->exit_false->label << "\n";
     o << "    jmp " << this->exit_true->label << "\n";
-
 }
 
 void CFG::gen_x86(ostream &o) {

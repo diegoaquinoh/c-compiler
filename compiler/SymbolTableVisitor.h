@@ -18,6 +18,13 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         virtual antlrcpp::Any visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) override ;
         virtual antlrcpp::Any visitDecl_item(ifccParser::Decl_itemContext *ctx) override ;
 
+        virtual antlrcpp::Any visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx) override;
+        virtual antlrcpp::Any visitSwitch_clause(ifccParser::Switch_clauseContext *ctx) override;
+        virtual antlrcpp::Any visitCase_label(ifccParser::Case_labelContext *ctx) override;
+        virtual antlrcpp::Any visitDefault_label(ifccParser::Default_labelContext *ctx) override;
+        virtual antlrcpp::Any visitCase_value(ifccParser::Case_valueContext *ctx) override;
+        virtual antlrcpp::Any visitBreak_stmt(ifccParser::Break_stmtContext *ctx) override;
+
         virtual antlrcpp::Any visitAffectStmt(ifccParser::AffectStmtContext *ctx) override ;
 
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override ;

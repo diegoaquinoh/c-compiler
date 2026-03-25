@@ -28,6 +28,9 @@ class IRGenVisitor : public ifccBaseVisitor {
         
         virtual antlrcpp::Any visitIf_stmt(ifccParser::If_stmtContext *ctx) override;
         virtual antlrcpp::Any visitElse_stmt(ifccParser::Else_stmtContext *ctx) override;
+        virtual antlrcpp::Any visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx) override;
+        virtual antlrcpp::Any visitBreak_stmt(ifccParser::Break_stmtContext *ctx) override;
+        // Expression visitors
 
         virtual antlrcpp::Any visitNegative(ifccParser::NegativeContext *ctx) override;
         virtual antlrcpp::Any visitParens(ifccParser::ParensContext *ctx) override;
@@ -53,6 +56,7 @@ class IRGenVisitor : public ifccBaseVisitor {
         
         private:
                 int cptTempVariables = 0;
+                bool breakTriggered = false;
                 IR ir;
 
 

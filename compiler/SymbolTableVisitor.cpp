@@ -52,6 +52,44 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *c
     return 0;
 }
 
+antlrcpp::Any SymbolTableVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx) {
+    this->visit(ctx->expr());
+    for (auto *clause : ctx->switch_clause()) {
+        this->visit(clause);
+    }
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitSwitch_clause(ifccParser::Switch_clauseContext *ctx) {
+    if (ctx->case_label()) {
+        this->visit(ctx->case_label());
+    }
+    if (ctx->default_label()) {
+        this->visit(ctx->default_label());
+    }
+    for (auto *stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitCase_label(ifccParser::Case_labelContext *ctx) {
+    this->visit(ctx->case_value());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitDefault_label(ifccParser::Default_labelContext *ctx) {
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitCase_value(ifccParser::Case_valueContext *ctx) {
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitBreak_stmt(ifccParser::Break_stmtContext *ctx) {
+    return 0;
+}
+
 antlrcpp::Any SymbolTableVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx) {
     useVar(ctx->VAR()->getText());
     if (ctx->expr()) {
