@@ -110,6 +110,8 @@ $RECYCLE.BIN/
 # ============================================
 # Fichiers de test générés
 # ============================================
+test.c
+test.s
 *.test.c
 *.test.s
 test_output/

@@ -9,7 +9,9 @@ stmt : decl_stmt | expr ';' | if_stmt | return_stmt;
 decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
 decl_item : VAR ('=' expr)? ;
 
-if_stmt: 'if' '(' expr ')' '{' stmt* '}' (else_stmt)? ;
+affect_stmt: VAR '=' expr ';' ;
+
+if_stmt: 'if' expr '{' stmt* '}' (else_stmt)? ;
 else_stmt: 'else' '{' stmt* '}' ;
 
 return_stmt : RETURN expr ';' ;
@@ -25,10 +27,10 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | expr '&' expr                         # bitwiseand
      | expr '^' expr                         # bitwisexor
      | expr '|' expr                         # bitwiseor
+     | VAR '=' expr                          # affectStmt
      | CONST                                 # const
      | CHAR_CONST                            # const
      | VAR                                   # var
-     | VAR '=' expr                          # affectStmt
      ;
 
 RETURN : 'return' ;

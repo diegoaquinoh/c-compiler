@@ -130,17 +130,22 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
-        if (this->ir.currentCfg->current_bb->has_return) {
+        if (this->ir.currentCfg->current_bb) {
+            if (this->ir.currentCfg->current_bb->has_return) {
             break;
         }
         this->ir.currentCfg->current_bb->exit_true = nextBB;
+        }
     }
 
     if (elseBB) {
         cfg->add_bb(elseBB);
         this->visit(ctx->else_stmt());
-        if (!this->ir.currentCfg->current_bb->has_return) {
+        
+        if (this->ir.currentCfg->current_bb) {
+            if (!this->ir.currentCfg->current_bb->has_return) {
             this->ir.currentCfg->current_bb->exit_true = nextBB;
+        }
         }
     }
 
