@@ -105,7 +105,16 @@ antlrcpp::Any SymbolTableVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
 }
 
 antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx){
-    this->visit(ctx->expr());
+    ifccParser::ExprContext *operand = ctx->expr();
+
+    // Reject only direct chained unary minus tokens: --10, ---10, etc.
+    if (dynamic_cast<ifccParser::NegativeContext *>(operand) != nullptr) {
+        cerr << "error: double negation is not allowed\n";
+        errorFlag = true;
+        return 0;
+    }
+
+    this->visit(operand);
 
     return 0;
 }
