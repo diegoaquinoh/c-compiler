@@ -4,11 +4,9 @@ axiom : prog EOF ;
 
 prog : func_def+ ;
 
-func_def : RET_TYPE '(' param_list? ')' block ;
+func_def : RET_TYPE VAR '(' param_list? ')' block ;
 
-param_list : param (',' param)* ;
-
-param : TYPE VAR ;
+param_list : TYPE VAR (',' TYPE VAR)* ;
 
 stmt : decl_stmt | expr ';' | if_stmt | return_stmt;
 

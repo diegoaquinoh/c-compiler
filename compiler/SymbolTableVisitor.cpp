@@ -1,20 +1,55 @@
 #include "SymbolTableVisitor.h"
 using namespace std;
 
-int SymbolTableVisitor::declareVar(const std::string &funcName, const std::string &name) {
-    if (allSymbolTables[funcName].count(name)) {
-        cerr << "error: variable '" << name << "' declared multiple times\n";
-        errorFlag = true;
-        return allSymbolTables[funcName][name];
+// --- Scope management ---
+
+void SymbolTableVisitor::enterScope() {
+    scopeMarkers.push_back(varStack.size());
+}
+
+void SymbolTableVisitor::exitScope() {
+    int marker = scopeMarkers.back();
+    scopeMarkers.pop_back();
+    varStack.resize(marker);
+}
+
+int SymbolTableVisitor::declareVar(const std::string &name) {
+    // Check for redeclaration within current scope only
+    int scopeStart = scopeMarkers.back();
+    for (int i = scopeStart; i < (int)varStack.size(); i++) {
+        if (varStack[i].first == name) {
+            cerr << "error: variable '" << name << "' declared multiple times in same scope\n";
+            errorFlag = true;
+            return varStack[i].second;
+        }
     }
     nextIndex -= 4;
-    allSymbolTables[funcName][name] = nextIndex;
-    allSymbolTypes[funcName][name] = IntType;
+    varStack.push_back({name, nextIndex});
+    // Also add to the flat symbol table for IRGenVisitor
+    allSymbolTables[currentFunction][name] = nextIndex;
     return nextIndex;
 }
 
-void SymbolTableVisitor::useVar(const std::string &funcName, const std::string &name) {
-    if (!allSymbolTables[funcName].count(name)) {
+int SymbolTableVisitor::lookupVar(const std::string &name) {
+    // Search from back to front (innermost scope first)
+    for (int i = (int)varStack.size() - 1; i >= 0; i--) {
+        if (varStack[i].first == name) {
+            return varStack[i].second;
+        }
+    }
+    return 0; // not found
+}
+
+void SymbolTableVisitor::useVar(const std::string &name) {
+    // Search from back to front
+    bool found = false;
+    for (int i = (int)varStack.size() - 1; i >= 0; i--) {
+        if (varStack[i].first == name) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
         cerr << "error: variable '" << name << "' used before declaration\n";
         errorFlag = true;
     } else {
@@ -22,9 +57,9 @@ void SymbolTableVisitor::useVar(const std::string &funcName, const std::string &
     }
 }
 
-antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
+// --- Visitors ---
 
-    //visit all function definitions to build symbol tables and check variable usage
+antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
     for (auto *func : ctx->func_def()) {
         this->visit(func);
     }
@@ -37,6 +72,57 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
             }
         }
     }
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx) {
+    string funcName = ctx->VAR()->getText();
+    if (knownFunctions.count(funcName)) {
+        cerr << "error: function '" << funcName << "' already declared\n";
+        errorFlag = true;
+    }
+
+    currentFunction = funcName;
+    allSymbolTables[currentFunction] = {};
+    varStack.clear();
+    scopeMarkers.clear();
+    usedVars.clear();
+    nextIndex = 0;
+
+    // Register this function so other functions can call it
+    knownFunctions.insert(funcName);
+
+    // Count parameters
+    int paramCount = 0;
+    if (ctx->param_list()) {
+        auto params = ctx->param_list()->VAR();
+        paramCount = params.size();
+        functionArgCount[funcName] = paramCount;
+
+        // Enter function scope and declare parameters
+        enterScope();
+        for (auto *param : params) {
+            declareVar(param->getText());
+        }
+    } else {
+        functionArgCount[funcName] = 0;
+        enterScope();
+    }
+
+    // Visit the function body block (block will handle its own scope)
+    this->visit(ctx->block());
+
+    exitScope();
+    currentFunction = "";
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitBlock(ifccParser::BlockContext *ctx) {
+    enterScope();
+    for (auto *stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    exitScope();
     return 0;
 }
 
@@ -80,7 +166,7 @@ antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx
     if (argCount > 6) {
         cerr << "error: function '" << funcName << "' called with too many arguments (" << argCount << ")\n";
         errorFlag = true;
-    } else if (knownFunctions.count(funcName) && argCount != functionArgCount[funcName]) {
+    } else if (functionArgCount.count(funcName) && argCount != functionArgCount[funcName]) {
         cerr << "error: '" << funcName << "' expects " << functionArgCount[funcName]
              << " arguments, got " << argCount << "\n";
         errorFlag = true;
@@ -91,79 +177,47 @@ antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx){
-    string funcName = ctx->VAR()->getText();
-    if (knownFunctions.count(funcName)) {
-        cerr << "error: function '" << funcName << "' already declared\n";
-        errorFlag = true;
-    }
-    currentFunction = funcName;
-    allSymbolTables[currentFunction] = {};
-    usedVars.clear();
-    nextIndex = -4;
-
-    for (auto *param : ctx->param_list()->VAR()) {
-        declareVar(funcName, param->getText());
-    }
-
-    this->visit(ctx->stmt());
-
-    currentFunction = "";
-    return 0;
-}
-        
-
-antlrcpp::Any SymbolTableVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
-{
+antlrcpp::Any SymbolTableVisitor::visitMultdiv(ifccParser::MultdivContext *ctx) {
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
-
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
-{  
+antlrcpp::Any SymbolTableVisitor::visitAddsub(ifccParser::AddsubContext *ctx) {
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
-
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx){
+antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx) {
     this->visit(ctx->expr());
-
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitParens(ifccParser::ParensContext *ctx){
+antlrcpp::Any SymbolTableVisitor::visitParens(ifccParser::ParensContext *ctx) {
     this->visit(ctx->expr());
-
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitVar(ifccParser::VarContext *ctx) {
     useVar(ctx->VAR()->getText());
-
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
+antlrcpp::Any SymbolTableVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx) {
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
-
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
+antlrcpp::Any SymbolTableVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx) {
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
-
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
+antlrcpp::Any SymbolTableVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx) {
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
-
     return 0;
 }

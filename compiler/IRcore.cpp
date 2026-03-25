@@ -4,19 +4,7 @@
 // IR //
 
 IR::IR() {
-    this->currentCfg = new CFG(this);
-
-    BasicBlock* prologueBB = new BasicBlock(this->currentCfg, "prologue");
-    BasicBlock* body = new BasicBlock(this->currentCfg, "body");
-    BasicBlock* epilogue = new BasicBlock(this->currentCfg, "epilogue");
-
-    prologueBB->exit_true = body;
-    body->exit_true = epilogue;
-
-    this->currentCfg->add_bb(prologueBB);
-    this->currentCfg->add_bb(body);
-    this->currentCfg->add_bb(epilogue);
-    this->currentCfg->current_bb = body;
+    this->currentCfg = nullptr;
 }
 
 // IR::~IR() {
