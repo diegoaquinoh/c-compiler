@@ -66,5 +66,6 @@ int main(int argn, const char **argv)
 
   //cout << v.getIR().toString();
 
+//  v.getIR().gen_x86(std::cout);
   return 0;
 }

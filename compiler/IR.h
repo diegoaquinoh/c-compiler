@@ -28,7 +28,9 @@ class IRInstr {
 		sub,
 		mul,
 		div,
+		mod,
 		neg, // -(1) => neg var1 => var1 = -var1
+		lnot,
 		rmem,
 		wmem,
 		call,
@@ -36,8 +38,11 @@ class IRInstr {
 		bor,
 		band,
 		cmp_eq,
+		cmp_ne,
 		cmp_lt,
 		cmp_le,
+		cmp_gt,
+		cmp_ge,
 		rtrn
 	} Operation;
 
@@ -47,6 +52,7 @@ class IRInstr {
 
 	/** Actual code generation */
 	void gen_x86(ostream &o); /**< x86 assembly code generation for this IR instruction */
+	void gen_arm(ostream &o);
 	string toString() const;
 	
  private:
@@ -62,6 +68,7 @@ class BasicBlock {
  public:
 	BasicBlock(CFG* cfg, string entry_label);
 	void gen_x86(ostream &o); /**< x86 assembly code generation for this basic block (very simple) */
+	void gen_arm(ostream &o);
 	string toString() const;
 
 	void add_IRInstr(IRInstr::Operation op, Type t, vector<string> params);
@@ -72,7 +79,9 @@ class BasicBlock {
 	string label; /**< label of the BB, also will be the label in the generated code */
 	CFG* cfg; /** < the CFG where this block belongs */
 	vector<IRInstr*> instrs; /** < the instructions themselves. */
-
+  	string test_var_name;  /** < when generating IR code for an if(expr) or while(expr) etc,
+													 store here the name of the variable that holds the value of expr */
+	bool has_return; /** < true when this block is terminated by a return */
  protected:
 
  
@@ -95,6 +104,12 @@ class CFG {
 	void gen_x86_prologue(ostream& o, const string& functionName);
 	void gen_x86_epilogue(ostream& o);
 
+	// arm code generation
+	void gen_arm(ostream& o);
+	void gen_arm_prologue(ostream& o, const string& functionName);
+	void gen_arm_epilogue(ostream& o);
+	int get_var_index_arm(string name);
+
 	// symbol table methods
 	void add_to_symbol_table(string name, Type t);
 	string create_new_tempvar(Type t);
@@ -108,6 +123,7 @@ class CFG {
  protected:
 	map <string, Type> SymbolType; /**< part of the symbol table  */
 	map <string, int> SymbolIndex; /**< part of the symbol table  */
+	int stackSize = 0;
 	int nextFreeSymbolIndex; /**< to allocate new symbols in the symbol table */
 	int nextBBnumber; /**< just for naming */
 	
@@ -124,6 +140,7 @@ class IR {
 	map<string, CFG*> cfgsMap;
 
 	void gen_x86(ostream& o); /**< x86 assembly code generation for this function */
+	void gen_arm(ostream& o);
 	string toString() const;
 };
 

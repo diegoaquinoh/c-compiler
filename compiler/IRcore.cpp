@@ -87,6 +87,7 @@ BasicBlock::BasicBlock(CFG* cfg, string entry_label) {
     this->label = entry_label;
     this->exit_true = nullptr;
     this->exit_false = nullptr;
+    this->has_return = false;
 }
 
 void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> params) {
@@ -140,7 +141,10 @@ string BasicBlock::toString() const {
     }
     oss << "  exit_true=" << (exit_true ? exit_true->label : "null")
         << " exit_false=" << (exit_false ? exit_false->label : "null") << "\n";
-
+    oss << "  has_return=" << (has_return ? "true" : "false") << "\n";
+    if (!test_var_name.empty()) {
+        oss << "  test_var=" << test_var_name << "\n";
+    }
     return oss.str();
 }
 
