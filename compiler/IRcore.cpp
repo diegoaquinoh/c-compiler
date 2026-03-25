@@ -77,6 +77,23 @@ string CFG::new_BB_name(){
     return bbName;
 }
 
+void CFG::push_break_target(BasicBlock* bb) {
+    this->breakTargets.push_back(bb);
+}
+
+void CFG::pop_break_target() {
+    if (!this->breakTargets.empty()) {
+        this->breakTargets.pop_back();
+    }
+}
+
+BasicBlock* CFG::get_break_target() const {
+    if (this->breakTargets.empty()) {
+        return nullptr;
+    }
+    return this->breakTargets.back();
+}
+
 
 
 
@@ -109,7 +126,9 @@ static const char* opToString(IRInstr::Operation op) {
         case IRInstr::sub:    return "sub";
         case IRInstr::mul:    return "mul";
         case IRInstr::div:    return "div";
+        case IRInstr::mod:    return "mod";
         case IRInstr::neg:    return "neg";
+        case IRInstr::lnot:   return "lnot";
         case IRInstr::rmem:   return "rmem";
         case IRInstr::wmem:   return "wmem";
         case IRInstr::call:   return "call";
@@ -117,8 +136,11 @@ static const char* opToString(IRInstr::Operation op) {
         case IRInstr::bor:    return "bor";
         case IRInstr::band:   return "band";
         case IRInstr::cmp_eq: return "cmp_eq";
+        case IRInstr::cmp_ne: return "cmp_ne";
         case IRInstr::cmp_lt: return "cmp_lt";
         case IRInstr::cmp_le: return "cmp_le";
+        case IRInstr::cmp_gt: return "cmp_gt";
+        case IRInstr::cmp_ge: return "cmp_ge";
         case IRInstr::rtrn:   return "rtrn";
         default:              return "<unknown>";
     }
