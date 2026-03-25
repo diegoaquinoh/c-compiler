@@ -141,7 +141,7 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
 {
     CFG *cfg = this->ir.currentCfg;
     BasicBlock *entryBB = cfg->current_bb;
-    BasicBlock *afterSwitch = entryBB->exit_true;
+    BasicBlock *afterSwitch = new BasicBlock(cfg, cfg->new_BB_name() + "_switch_after");
 
     this->breakTriggered = false;
 
@@ -153,6 +153,9 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
 
     auto clauses = ctx->switch_clause();
     if (clauses.empty()) {
+        entryBB->exit_true = afterSwitch;
+        entryBB->exit_false = nullptr;
+        cfg->add_bb(afterSwitch);
         cfg->current_bb = afterSwitch;
         return 0;
     }
@@ -226,6 +229,7 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
     }
 
     cfg->pop_break_target();
+    cfg->add_bb(afterSwitch);
     cfg->current_bb = afterSwitch;
 
     return 0;

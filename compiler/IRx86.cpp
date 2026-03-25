@@ -22,6 +22,11 @@ void IR::gen_x86(ostream &o) {
 
 // CFG // 
 
+string CFG::IR_reg_to_asm(string reg) {
+    int index = this->get_var_index(reg);
+    return to_string(index) + "(%rbp)";
+}
+
 void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     #ifdef __APPLE__
         o << "    .globl _" << functionName << "\n";
@@ -52,9 +57,27 @@ void CFG::gen_x86_epilogue(ostream &o){
 // BasicBlock // 
 
 void BasicBlock::gen_x86(ostream &o) {
+    o << this->label << ":\n";
+
     for (auto instr : this->instrs) {
         instr->gen_x86(o);
     }
+
+    if (this->exit_true == nullptr) {
+        o << "    movq %rbp, %rsp\n";
+        o << "    popq %rbp\n";
+        o << "    retq\n";
+        return;
+    }
+
+    if (this->exit_false == nullptr) {
+        o << "    jmp " << this->exit_true->label << "\n";
+        return;
+    }
+
+    o << "    cmpl $0, " << this->cfg->IR_reg_to_asm("!reg") << "\n";
+    o << "    je " << this->exit_false->label << "\n";
+    o << "    jmp " << this->exit_true->label << "\n";
 }
 
 void CFG::gen_x86(ostream &o) {
