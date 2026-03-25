@@ -107,7 +107,6 @@ antlrcpp::Any SymbolTableVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
 antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx){
     ifccParser::ExprContext *operand = ctx->expr();
 
-    // Reject only direct chained unary minus tokens: --10, ---10, etc.
     if (dynamic_cast<ifccParser::NegativeContext *>(operand) != nullptr) {
         cerr << "error: double negation is not allowed\n";
         errorFlag = true;
@@ -131,12 +130,12 @@ antlrcpp::Any SymbolTableVisitor::visitVar(ifccParser::VarContext *ctx) {
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
+/* antlrcpp::Any SymbolTableVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
 
     return 0;
-}
+} */
 
 antlrcpp::Any SymbolTableVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->visit(ctx->expr(0));
@@ -149,5 +148,13 @@ antlrcpp::Any SymbolTableVisitor::visitBitwiseor(ifccParser::BitwiseorContext *c
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
 
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx) {
+    this->visit(ctx->expr());
+    for (auto stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
     return 0;
 }
