@@ -4,20 +4,15 @@
 
 void IR::gen_arm(ostream &o) {
     for (const auto& entry : cfgsMap) {
-        const string& functionName = entry.first;
         CFG* cfg = entry.second;
         if (cfg == nullptr) {
             continue;
         }
 
-        cfg->gen_arm_prologue(o, functionName);
+        cfg->gen_arm_prologue(o);
         cfg->gen_arm(o);
         cfg->gen_arm_epilogue(o);
     }
-
-    this->currentCfg->gen_arm_prologue(o, "main");
-    this->currentCfg->gen_arm(o);
-    this->currentCfg->gen_arm_epilogue(o);
 }
 
 // CFG // 
@@ -26,7 +21,7 @@ int CFG::get_var_index_arm(string name){
     return -1 * this->SymbolIndex.at(name);
 }
 
-void CFG::gen_arm_prologue(ostream &o, const string& functionName){
+void CFG::gen_arm_prologue(ostream &o){
     #ifdef __APPLE__
         o << "    .globl _" << functionName << "\n";
         o << "_" << functionName << ":\n";
@@ -35,26 +30,57 @@ void CFG::gen_arm_prologue(ostream &o, const string& functionName){
         o << functionName << ":\n";
     #endif
 
-    int size = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
+    // Save frame pointer and link register
+    o << "    stp x29, x30, [sp, #-16]!\n";
+    o << "    mov x29, sp\n";
 
-    // Il faut aligner avec un multiple de 16 pour arm
-    this->stackSize = ((size + 15) / 16) * 16; 
+    int size = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
+    // Add padding for temp variables created during codegen
+    size += 64;
+
+    // Align to 16 bytes for ARM
+    this->stackSize = ((size + 15) / 16) * 16;
     o << "    sub sp, sp, #" << stackSize << "\n";
 
-    // Il faut mettre 0 dans la valeur retournée par défaut par return (au cas où)
-    o << "    str wzr, [sp, #" << (stackSize - 4) << "]\n";
+    // Copy parameters from registers to stack slots
+    const char* argRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+    for (size_t i = 0; i < paramNames.size() && i < 6; i++) {
+        int idx = get_var_index_arm(paramNames[i]);
+        o << "    str " << argRegs[i] << ", [sp, #" << idx << "]\n";
+    }
 }
 
 void CFG::gen_arm_epilogue(ostream &o){
+    o << functionName << "_end:\n";
     o << "    add sp, sp, #" << stackSize << "\n";
+    // Restore frame pointer and link register
+    o << "    ldp x29, x30, [sp], #16\n";
     o << "    ret\n";
 }
 
 // BasicBlock // 
 
 void BasicBlock::gen_arm(ostream &o) {
+    // Output label for this basic block
+    o << label << ":\n";
+
+    // Generate all instructions
     for (auto instr : this->instrs) {
         instr->gen_arm(o);
+    }
+
+    // Generate branch logic
+    if (exit_true == nullptr) {
+        // End of function: jump to epilogue (handled by CFG)
+    } else if (exit_false == nullptr) {
+        // Unconditional jump
+        o << "    b " << exit_true->label << "\n";
+    } else {
+        // Conditional branch: test_var_name != 0 → exit_true, else → exit_false
+        int testIdx = cfg->get_var_index_arm(test_var_name);
+        o << "    ldr w8, [sp, #" << testIdx << "]\n";
+        o << "    cbz w8, " << exit_false->label << "\n";
+        o << "    b " << exit_true->label << "\n";
     }
 }
 
@@ -125,6 +151,7 @@ void IRInstr::gen_arm(ostream &o) {
             nameVar2 = this->params.at(1);
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            this->bb->cfg->add_to_symbol_table(nameVar2, this->t);
 
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
@@ -138,8 +165,8 @@ void IRInstr::gen_arm(ostream &o) {
 
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
 
-            // Il faut charger la valeur dans w0
             o << "    ldr w0, [sp, #" << index1 << "]\n";
+            o << "    b " << this->bb->cfg->functionName << "_end\n";
             break;
         case IRInstr::neg:
             nameVar1 = this->params.at(0);
@@ -227,6 +254,29 @@ void IRInstr::gen_arm(ostream &o) {
             o << "    str w0, [sp, #" << index1 << "]" << endl;
 
             break;
+        case IRInstr::call: {
+            string dest = this->params.at(0);
+            string funcCallName = this->params.at(1);
+
+            const char* callArgRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+
+            for (size_t i = 2; i < this->params.size(); i++) {
+                int argIndex = this->bb->cfg->get_var_index_arm(this->params.at(i));
+                o << "    ldr " << callArgRegs[i - 2] << ", [sp, #" << argIndex << "]\n";
+            }
+
+            #ifdef __APPLE__
+                o << "    bl _" << funcCallName << "\n";
+            #else
+                o << "    bl " << funcCallName << "\n";
+            #endif
+
+            // Store return value (w0) into destination
+            this->bb->cfg->add_to_symbol_table(dest, this->t);
+            int destIndex = this->bb->cfg->get_var_index_arm(dest);
+            o << "    str w0, [sp, #" << destIndex << "]\n";
+            break;
+        }
         case IRInstr::bxor:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);

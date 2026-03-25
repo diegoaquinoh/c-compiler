@@ -152,7 +152,6 @@ string IR::toString() const {
             oss << "  <null CFG>\n";
         }
     }
-    oss << this->currentCfg->toString();
     return oss.str();
 }
 

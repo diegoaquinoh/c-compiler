@@ -130,7 +130,7 @@ class BasicBlock {
  */
 class CFG {
  public:
-	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(0), nextBBnumber(0) {
+	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(-4), nextBBnumber(0) {
 		this->current_bb = nullptr;
 	};
 

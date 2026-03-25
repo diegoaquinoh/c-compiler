@@ -7,34 +7,126 @@ string IRGenVisitor::createVariableTmp() {
     return "!tmp" + to_string(cptTempVariables++);
 }
 
+// --- Scope management for variable renaming ---
+
+void IRGenVisitor::enterScope() {
+    scopeStack.push_back({});
+}
+
+void IRGenVisitor::exitScope() {
+    scopeStack.pop_back();
+}
+
+string IRGenVisitor::declareScoped(const string &name) {
+    // Check if name already exists in any outer scope
+    for (int i = (int)scopeStack.size() - 1; i >= 0; i--) {
+        if (scopeStack[i].count(name)) {
+            // Shadowing: create a unique name
+            string uniqueName = name + "@" + to_string(scopeCounter++);
+            scopeStack.back()[name] = uniqueName;
+            return uniqueName;
+        }
+    }
+    // First declaration: use original name
+    scopeStack.back()[name] = name;
+    return name;
+}
+
+string IRGenVisitor::scopedName(const string &name) {
+    // Search from innermost scope outward
+    for (int i = (int)scopeStack.size() - 1; i >= 0; i--) {
+        if (scopeStack[i].count(name)) {
+            return scopeStack[i][name];
+        }
+    }
+    return name; // fallback (shouldn't happen if semantic analysis passed)
+}
+
+// --- Visitors ---
+
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
-    // Prologue:
+    for (auto *func : ctx->func_def()) {
+        this->visit(func);
+    }
+    return 0;
+}
 
-    // Visit all statements
-    auto statements = ctx->stmt();
-    for (auto *stmt : statements) {
+antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
+{
+    string funcName = ctx->VAR()->getText();
+
+    // Create a new CFG for this function
+    CFG* cfg = new CFG(&this->ir);
+    cfg->functionName = funcName;
+
+    // Reset scope state
+    scopeStack.clear();
+    scopeCounter = 0;
+    enterScope(); // function-level scope
+
+    // Register parameter names
+    if (ctx->param_list()) {
+        for (auto *param : ctx->param_list()->VAR()) {
+            string paramName = param->getText();
+            string irName = declareScoped(paramName);
+            cfg->paramNames.push_back(irName);
+            cfg->add_to_symbol_table(irName, IntType);
+        }
+    }
+
+    // Set up basic blocks: prologue -> body -> epilogue
+    BasicBlock* prologueBB = new BasicBlock(cfg, funcName + "_prologue");
+    BasicBlock* body = new BasicBlock(cfg, funcName + "_body");
+    BasicBlock* epilogue = new BasicBlock(cfg, funcName + "_epilogue");
+
+    prologueBB->exit_true = body;
+    body->exit_true = epilogue;
+
+    cfg->add_bb(prologueBB);
+    cfg->add_bb(body);
+    cfg->add_bb(epilogue);
+    cfg->current_bb = body;
+
+    // Store in IR
+    this->ir.cfgsMap[funcName] = cfg;
+    this->ir.currentCfg = cfg;
+
+    // Reset temp variable counter per function
+    cptTempVariables = 0;
+
+    // Visit the function body
+    this->visit(ctx->block());
+
+    // Implicit return 0 for main (or any int function without explicit return)
+    if (!cfg->current_bb->has_return) {
+        string retType = ctx->TYPE()->getText();
+        if (retType == "int") {
+            vector<string> loadZero = {reg, "0"};
+            cfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, loadZero);
+
+            vector<string> retZero = {reg};
+            cfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, retZero);
+            cfg->current_bb->has_return = true;
+        }
+        cfg->current_bb->exit_true = nullptr;
+        cfg->current_bb->exit_false = nullptr;
+    }
+
+    exitScope(); // end function scope
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitBlock(ifccParser::BlockContext *ctx)
+{
+    enterScope();
+    for (auto *stmt : ctx->stmt()) {
         this->visit(stmt);
         if (this->ir.currentCfg->current_bb->has_return) {
             break;
         }
     }
-
-    // `main` implicitly returns 0 only if control can still reach the end.
-    if (!this->ir.currentCfg->current_bb->has_return) {
-        vector<string> loadZero = {reg, "0"};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, loadZero);
-
-        vector<string> retZero = {reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, retZero);
-        this->ir.currentCfg->current_bb->has_return = true;
-        this->ir.currentCfg->current_bb->exit_true = nullptr;
-        this->ir.currentCfg->current_bb->exit_false = nullptr;
-    }
-
-    // Epilogue:
-    
-
+    exitScope();
     return 0;
 }
 
@@ -49,10 +141,11 @@ antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
     string varName = ctx->VAR()->getText();
+    string irName = declareScoped(varName);
 
     if (ctx->expr()) {
         this->visit(ctx->expr());
-        vector<string> v = {varName, reg};
+        vector<string> v = {irName, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
     }
 
@@ -62,16 +155,17 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 {
     string varName = ctx->VAR()->getText();
+    string irName = scopedName(varName);
 
     this->visit(ctx->expr());
 
-    vector<string> v = {varName, reg};
+    vector<string> v = {irName, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     return 0;
 }
 
-antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
+antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx)
 {
     int val = stoi(ctx->CONST()->getText());
 
@@ -84,8 +178,9 @@ antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx)
 antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 {
     string varName = ctx->VAR()->getText();
+    string irName = scopedName(varName);
 
-    vector<string> v = {reg, varName};
+    vector<string> v = {reg, irName};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
 
     return 0;
@@ -109,14 +204,13 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
     currentBB->exit_false = (elseBB != nullptr) ? elseBB : nextBB;
 
     this->visit(ctx->expr());
+    currentBB->test_var_name = reg;
 
     cfg->add_bb(trueBB);
 
-    for (auto stmt : ctx->stmt()) {
-        this->visit(stmt);
-        if (this->ir.currentCfg->current_bb->has_return) {
-            break;
-        }
+    // Visit the if block
+    this->visit(ctx->block());
+    if (!this->ir.currentCfg->current_bb->has_return) {
         this->ir.currentCfg->current_bb->exit_true = nextBB;
     }
 
@@ -135,12 +229,7 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
 {
-    for (auto stmt : ctx->stmt()) {
-        this->visit(stmt);
-        if (this->ir.currentCfg->current_bb->has_return) {
-            break;
-        }
-    }
+    this->visit(ctx->block());
     return 0;
 }
 
@@ -164,9 +253,9 @@ antlrcpp::Any IRGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
     string indexTmp = createVariableTmp();
     vector<string> v = {indexTmp, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
-    
+
     this->visit(ctx->expr(1));
-    
+
     if (op == "*") {
         vector<string> v2 = {reg, indexTmp, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, v2);
@@ -182,14 +271,14 @@ antlrcpp::Any IRGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
 }
 
 antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
-{  
+{
     auto op = ctx->OP->getText();
     this->visit(ctx->expr(0));
 
     string indexTmp = createVariableTmp();
     vector<string> v = {indexTmp, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
-    
+
     this->visit(ctx->expr(1));
 
     if (op == "+") {
@@ -258,11 +347,11 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
 antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     string funcName = ctx->VAR()->getText();
     auto args = ctx->expr();
-    
+
     // 1. Evaluate each arg and save to temp stack slots
     vector<string> varTempNames;
     for (auto *arg : args) {
-        this->visit(arg);              
+        this->visit(arg);
         string varTempName = createVariableTmp();
         vector<string> v = {varTempName, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
@@ -275,7 +364,7 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
 
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, v);
 
-    
+
     return 0;
 }
 
@@ -286,7 +375,7 @@ antlrcpp::Any IRGenVisitor::visitRelational(ifccParser::RelationalContext *ctx){
     string indexTmp = createVariableTmp();
     vector<string> v = {indexTmp, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
-    
+
     this->visit(ctx->expr(1));
 
     if (op == "<") {
@@ -314,7 +403,7 @@ antlrcpp::Any IRGenVisitor::visitEquality(ifccParser::EqualityContext *ctx){
     string indexTmp = createVariableTmp();
     vector<string> v = {indexTmp, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
-    
+
     this->visit(ctx->expr(1));
 
     if (op == "==") {
@@ -332,6 +421,6 @@ antlrcpp::Any IRGenVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx) 
     this->visit(ctx->expr());
     vector<string> v = {reg, reg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::lnot, IntType, v);
-    
+
     return 0;
 }

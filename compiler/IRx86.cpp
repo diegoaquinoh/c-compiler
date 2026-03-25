@@ -4,25 +4,20 @@
 
 void IR::gen_x86(ostream &o) {
     for (const auto& entry : cfgsMap) {
-        const string& functionName = entry.first;
         CFG* cfg = entry.second;
         if (cfg == nullptr) {
             continue;
         }
 
-        cfg->gen_x86_prologue(o, functionName);
+        cfg->gen_x86_prologue(o);
         cfg->gen_x86(o);
         cfg->gen_x86_epilogue(o);
     }
-
-    this->currentCfg->gen_x86_prologue(o, "main");
-    this->currentCfg->gen_x86(o);
-    this->currentCfg->gen_x86_epilogue(o);
 }
 
 // CFG // 
 
-void CFG::gen_x86_prologue(ostream &o, const string& functionName){
+void CFG::gen_x86_prologue(ostream &o){
     #ifdef __APPLE__
         o << "    .globl _" << functionName << "\n";
         o << "_" << functionName << ":\n";
@@ -34,16 +29,24 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     o << "    pushq %rbp\n";
     o << "    movq %rsp, %rbp\n";
 
-    int stackSize = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
-    int allocSize = (stackSize + 64 + 15) & ~15;
+    int stackSz = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
+    int allocSize = (stackSz + 64 + 15) & ~15;
     if (allocSize > 0) {
         o << "    subq $" << allocSize << ", %rsp\n";
     }
 
     o << "    movl $0, -4(%rbp)\n";
+
+    // Copy parameters from registers to stack slots
+    const char* argRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    for (size_t i = 0; i < paramNames.size() && i < 6; i++) {
+        int idx = get_var_index(paramNames[i]);
+        o << "    movl " << argRegs[i] << ", " << idx << "(%rbp)\n";
+    }
 }
 
 void CFG::gen_x86_epilogue(ostream &o){
+    o << functionName << "_end:\n";
     o << "    movq %rbp, %rsp\n";
     o << "    popq %rbp\n";
     o << "    retq\n";
@@ -52,8 +55,26 @@ void CFG::gen_x86_epilogue(ostream &o){
 // BasicBlock // 
 
 void BasicBlock::gen_x86(ostream &o) {
+    // Output label for this basic block
+    o << label << ":\n";
+
+    // Generate all instructions
     for (auto instr : this->instrs) {
         instr->gen_x86(o);
+    }
+
+    // Generate branch logic
+    if (exit_true == nullptr) {
+        // End of function: jump to epilogue (handled by CFG)
+    } else if (exit_false == nullptr) {
+        // Unconditional jump
+        o << "    jmp " << exit_true->label << "\n";
+    } else {
+        // Conditional branch: test_var_name != 0 → exit_true, else → exit_false
+        int testIdx = cfg->get_var_index(test_var_name);
+        o << "    cmpl $0, " << testIdx << "(%rbp)\n";
+        o << "    je " << exit_false->label << "\n";
+        o << "    jmp " << exit_true->label << "\n";
     }
 }
 
@@ -146,6 +167,7 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            this->bb->cfg->add_to_symbol_table(nameVar2, this->t);
 
             index1 = this->bb->cfg->get_var_index(nameVar1);
             index2 = this->bb->cfg->get_var_index(nameVar2);
@@ -159,6 +181,7 @@ void IRInstr::gen_x86(ostream &o) {
             index1 = this->bb->cfg->get_var_index(nameVar1);
 
             o << "    movl " << index1 << "(%rbp), %eax" << endl;
+            o << "    jmp " << this->bb->cfg->functionName << "_end" << endl;
             break;
         case IRInstr::neg:
             nameVar1 = this->params.at(0);

@@ -4,13 +4,13 @@ axiom : prog EOF ;
 
 prog : func_def+ ;
 
-func_def : RET_TYPE VAR '(' param_list? ')' block ;
+func_def : TYPE VAR '(' param_list? ')' block ;
 
 param_list : TYPE VAR (',' TYPE VAR)* ;
 
 stmt : decl_stmt | expr ';' | if_stmt | return_stmt;
 
-decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
+decl_stmt : TYPE decl_item (',' decl_item)* ';' ;
 decl_item : VAR ('=' expr)? ;
 
 if_stmt: 'if' '(' expr ')' block (else_stmt)? ;
@@ -37,8 +37,7 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      ;
 
 RETURN : 'return' ;
-TYPE : 'int' ;
-RET_TYPE: 'int' | 'void';
+TYPE : 'int' | 'void' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
 CONST : [0-9]+ ;
 COMMENT : '/*' .*? '*/' -> skip ;
