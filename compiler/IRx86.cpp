@@ -161,7 +161,6 @@ void IRInstr::gen_x86(ostream &o) {
             o << "    movl %eax, " << destIndex << "(%rbp)" << endl;
             break;
         }
-        case IRInstr::copy:
         case IRInstr::copy: {
             // var1 = var2
             nameVar1 = this->params.at(0);
