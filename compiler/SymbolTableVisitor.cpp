@@ -138,8 +138,20 @@ antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx
     return 0;
 }
 
+antlrcpp::Any SymbolTableVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx){
+    this->visit(ctx->expr());
+
+    return 0;
+}
+
 antlrcpp::Any SymbolTableVisitor::visitParens(ifccParser::ParensContext *ctx){
     this->visit(ctx->expr());
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitConst(ifccParser::ConstContext *ctx) {
+    (void)ctx;
 
     return 0;
 }
@@ -150,12 +162,12 @@ antlrcpp::Any SymbolTableVisitor::visitVar(ifccParser::VarContext *ctx) {
     return 0;
 }
 
-/* antlrcpp::Any SymbolTableVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
+antlrcpp::Any SymbolTableVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
 
     return 0;
-} */
+}
 
 antlrcpp::Any SymbolTableVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->visit(ctx->expr(0));
@@ -165,6 +177,20 @@ antlrcpp::Any SymbolTableVisitor::visitBitwisexor(ifccParser::BitwisexorContext 
 }
 
 antlrcpp::Any SymbolTableVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitRelational(ifccParser::RelationalContext *ctx){
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitEquality(ifccParser::EqualityContext *ctx){
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
 
