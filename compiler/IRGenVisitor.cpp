@@ -73,11 +73,27 @@ antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
-    int val = stoi(ctx->CONST()->getText());
-
+    int val;
+    if (ctx->CONST()) {
+        val = stoi(ctx->CONST()->getText());
+    } else {
+        string token = ctx->CHAR_CONST()->getText(); // e.g. "'a'"
+        if (token[1] == '\\') {
+            switch(token[2]) {
+                case 'n':  val = '\n'; break;
+                case 't':  val = '\t'; break;
+                case 'r':  val = '\r'; break;
+                case '\\': val = '\\'; break;
+                case '\'': val = '\''; break;
+                case '0':  val = '\0'; break;
+                default:   val = token[2]; break;
+            }
+        } else {
+            val = token[1];
+        }
+    }
     vector<string> v = {reg, to_string(val)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
-
     return 0;
 }
 

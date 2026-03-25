@@ -366,6 +366,28 @@ void IRInstr::gen_arm(ostream &o) {
             o << "    cset w0, ge" << endl;
             o << "    str w0, [sp, #" << index1 << "]" << endl;
             break;
+        case IRInstr::call: {
+            string dest = this->params.at(0);
+            string funcName = this->params.at(1);
+
+            const char* argRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+
+            for (size_t i = 2; i < this->params.size(); i++) {
+                int argIndex = this->bb->cfg->get_var_index_arm(this->params.at(i));
+                o << "    ldr " << argRegs[i - 2] << ", [sp, #" << argIndex << "]\n";
+            }
+
+            #ifdef __APPLE__
+                o << "    bl _" << funcName << "\n";
+            #else
+                o << "    bl " << funcName << "\n";
+            #endif
+
+            this->bb->cfg->add_to_symbol_table(dest, this->t);
+            int destIndex = this->bb->cfg->get_var_index_arm(dest);
+            o << "    str w0, [sp, #" << destIndex << "]\n";
+            break;
+        }
         default:
             break;
     }
