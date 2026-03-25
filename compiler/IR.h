@@ -85,7 +85,7 @@ class IRInstr {
 					followed by a conditional branch to the exit_false branch,
 					followed by an unconditional branch to the exit_true branch
 	 The attribute test_var_name itself is defined when converting 
-  the if, while, etc of the AST  to IR.
+  the if, while, switch-case dispatch, etc of the AST to IR.
 
 Possible optimization:
      a cmp_* comparison instructions, if it is the last instruction of its block, 
@@ -160,6 +160,9 @@ class CFG {
 	// basic block management
 	string new_BB_name();
 	BasicBlock* current_bb;
+	void push_break_target(BasicBlock* bb);
+	void pop_break_target();
+	BasicBlock* get_break_target() const;
 
  protected:
 	map <string, Type> SymbolType; /**< part of the symbol table  */
@@ -169,6 +172,7 @@ class CFG {
 	int nextBBnumber; /**< just for naming */
 	
 	vector <BasicBlock*> bbs; /**< all the basic blocks of this CFG*/
+	vector <BasicBlock*> breakTargets; /**< stack of break targets for nested switch/loop constructs */
 };
 
 
