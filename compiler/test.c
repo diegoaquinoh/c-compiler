@@ -1,6 +1,5 @@
 int main() {
-    int a = 0;
-    int b = 6;
-    int c = 8;
-    return c;
+    int a = 2;
+    int b = 9;
+    return b % a;
 }

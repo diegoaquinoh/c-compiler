@@ -77,10 +77,8 @@ int main(int argn, const char **argv)
   }
 
   // Second Visitor: generate code using the symbol table
-  IRGenVisitor v(stv.getSymbolTable());
+  IRGenVisitor v;
   v.visit(tree);
-
-  cout << v.SymbolIndex.size() << "variables déclarées ! " << endl;
 
   switch (archiCible) {
     case X86:
