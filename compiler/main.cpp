@@ -23,6 +23,15 @@ const std::map<std::string, Architectures> architecturesByName = {
     {"ir", IR}
 };
 
+class StrictErrorListener : public antlr4::BaseErrorListener {
+public:
+    void syntaxError(antlr4::Recognizer*, antlr4::Token*, size_t line,
+                     size_t col, const string &msg, exception_ptr) override {
+        cerr << "error at line " << line << ":" << col << " " << msg << "\n";
+        exit(1);
+    }
+};
+
 int main(int argn, const char **argv)
 {
     Architectures archiCible = X86;
@@ -53,13 +62,19 @@ int main(int argn, const char **argv)
   }
   
   ANTLRInputStream input(in.str());
+  StrictErrorListener errorListener;
 
   ifccLexer lexer(&input);
+  lexer.removeErrorListeners();
+  lexer.addErrorListener(&errorListener);
+
   CommonTokenStream tokens(&lexer);
 
   tokens.fill();
 
   ifccParser parser(&tokens);
+  parser.removeErrorListeners();
+  parser.addErrorListener(&errorListener);
   tree::ParseTree* tree = parser.axiom();
 
   if(parser.getNumberOfSyntaxErrors() != 0)

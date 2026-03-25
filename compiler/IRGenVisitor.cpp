@@ -3,6 +3,10 @@ using namespace std;
 
 string reg = "!reg";
 
+static int getCaseValue(ifccParser::Case_valueContext *ctx) {
+    return stoi(ctx->getText());
+}
+
 string IRGenVisitor::createVariableTmp() {
     string nameVar = "!tmp" + to_string(cptTempVariables++);
     // Paramétrer la fonction plus tard pour gérer d'autres types ?
@@ -78,11 +82,27 @@ antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx) 
 {
-    int val = stoi(ctx->CONST()->getText());
-
+    int val;
+    if (ctx->CONST()) {
+        val = stoi(ctx->CONST()->getText());
+    } else {
+        string token = ctx->CHAR_CONST()->getText(); // e.g. "'a'"
+        if (token[1] == '\\') {
+            switch(token[2]) {
+                case 'n':  val = '\n'; break;
+                case 't':  val = '\t'; break;
+                case 'r':  val = '\r'; break;
+                case '\\': val = '\\'; break;
+                case '\'': val = '\''; break;
+                case '0':  val = '\0'; break;
+                default:   val = token[2]; break;
+            }
+        } else {
+            val = token[1];
+        }
+    }
     vector<string> v = {reg, to_string(val)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
-
     return 0;
 }
 
@@ -98,42 +118,148 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 {
-
     CFG *cfg = this->ir.currentCfg;
+    
+    // Create necessary basic blocks
+    BasicBlock *testBB = cfg->current_bb;
     BasicBlock *trueBB = new BasicBlock(cfg, cfg->new_BB_name() + "_true");
-    BasicBlock *nextBB = this->ir.currentCfg->current_bb->exit_true;
-    BasicBlock* currentBB = cfg->current_bb;
-
-
+    BasicBlock *endBB = new BasicBlock(cfg, cfg->new_BB_name() + "_endif");
     BasicBlock *elseBB = nullptr;
+
     if (ctx->else_stmt()) {
         elseBB = new BasicBlock(cfg, cfg->new_BB_name() + "_else");
     }
 
-    currentBB->exit_true = trueBB;
-    currentBB->exit_false = (elseBB != nullptr) ? elseBB : nextBB;
+    // Evaluate the condition in the current block
+    this->visit(ctx->expr());
+
+    // Link testBB
+    testBB->exit_true = trueBB;
+    testBB->exit_false = elseBB ? elseBB : endBB;
+
+    // Build true branch
+    cfg->add_bb(trueBB);
+    cfg->current_bb = trueBB;
+    for (auto stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    if (!cfg->current_bb->has_return) {
+        cfg->current_bb->exit_true = endBB;
+        cfg->current_bb->exit_false = nullptr;
+    }
+
+    // Build else branch if it exists
+    if (elseBB) {
+        cfg->add_bb(elseBB);
+        cfg->current_bb = elseBB;
+        this->visit(ctx->else_stmt());
+        if (!cfg->current_bb->has_return) {
+            cfg->current_bb->exit_true = endBB;
+            cfg->current_bb->exit_false = nullptr;
+        }
+    }
+
+    // Continue building in the endBB
+    cfg->add_bb(endBB);
+    cfg->current_bb = endBB;
+
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx)
+{
+    CFG *cfg = this->ir.currentCfg;
+    BasicBlock *entryBB = cfg->current_bb;
+    BasicBlock *afterSwitch = new BasicBlock(cfg, cfg->new_BB_name() + "_switch_after");
+
+    this->breakTriggered = false;
 
     this->visit(ctx->expr());
 
-    cfg->add_bb(trueBB);
+    string switchValue = createVariableTmp();
+    vector<string> saveSwitchValue = {switchValue, reg};
+    entryBB->add_IRInstr(IRInstr::copy, IntType, saveSwitchValue);
 
-    for (auto stmt : ctx->stmt()) {
-        this->visit(stmt);
-        if (this->ir.currentCfg->current_bb->has_return) {
-            break;
-        }
-        this->ir.currentCfg->current_bb->exit_true = nextBB;
+    auto clauses = ctx->switch_clause();
+    if (clauses.empty()) {
+        entryBB->exit_true = afterSwitch;
+        entryBB->exit_false = nullptr;
+        cfg->add_bb(afterSwitch);
+        cfg->current_bb = afterSwitch;
+        return 0;
     }
 
-    if (elseBB) {
-        cfg->add_bb(elseBB);
-        this->visit(ctx->else_stmt());
-        if (!this->ir.currentCfg->current_bb->has_return) {
-            this->ir.currentCfg->current_bb->exit_true = nextBB;
+    vector<BasicBlock*> clauseBodies;
+    vector<int> caseClauseIndexes;
+    vector<BasicBlock*> caseTests;
+    int defaultClauseIndex = -1;
+
+    for (size_t i = 0; i < clauses.size(); ++i) {
+        clauseBodies.push_back(new BasicBlock(cfg, cfg->new_BB_name() + "_switch_clause"));
+        if (clauses[i]->case_label()) {
+            caseClauseIndexes.push_back(static_cast<int>(i));
+            caseTests.push_back(new BasicBlock(cfg, cfg->new_BB_name() + "_switch_test"));
+        } else if (clauses[i]->default_label()) {
+            defaultClauseIndex = static_cast<int>(i);
         }
     }
 
-    cfg->current_bb = nextBB;
+    BasicBlock *defaultBB = (defaultClauseIndex >= 0) ? clauseBodies[defaultClauseIndex] : afterSwitch;
+    BasicBlock *firstDispatchBB = !caseTests.empty() ? caseTests.front() : defaultBB;
+
+    entryBB->exit_true = firstDispatchBB;
+    entryBB->exit_false = nullptr;
+
+    cfg->push_break_target(afterSwitch);
+
+    for (size_t i = 0; i < caseTests.size(); ++i) {
+        BasicBlock *testBB = caseTests[i];
+        BasicBlock *caseBodyBB = clauseBodies[caseClauseIndexes[i]];
+        BasicBlock *nextTestBB = (i + 1 < caseTests.size()) ? caseTests[i + 1] : defaultBB;
+
+        cfg->add_bb(testBB);
+
+        string caseValueVar = createVariableTmp();
+        vector<string> loadCaseValue = {
+            caseValueVar,
+            to_string(getCaseValue(clauses[caseClauseIndexes[i]]->case_label()->case_value()))
+        };
+        testBB->add_IRInstr(IRInstr::ldconst, IntType, loadCaseValue);
+
+        vector<string> compareCase = {reg, switchValue, caseValueVar};
+        testBB->add_IRInstr(IRInstr::cmp_eq, IntType, compareCase);
+        testBB->test_var_name = reg;
+        testBB->exit_true = caseBodyBB;
+        testBB->exit_false = nextTestBB;
+    }
+
+    for (size_t i = 0; i < clauses.size(); ++i) {
+        BasicBlock *bodyBB = clauseBodies[i];
+        BasicBlock *nextBodyBB = (i + 1 < clauseBodies.size()) ? clauseBodies[i + 1] : afterSwitch;
+
+        cfg->add_bb(bodyBB);
+        bodyBB->exit_true = nextBodyBB;
+
+        for (auto *stmt : clauses[i]->stmt()) {
+            this->visit(stmt);
+            if (this->ir.currentCfg->current_bb->has_return || this->breakTriggered) {
+                break;
+            }
+            if (this->ir.currentCfg->current_bb->exit_true == nullptr) {
+                this->ir.currentCfg->current_bb->exit_true = nextBodyBB;
+            }
+        }
+
+        if (this->breakTriggered) {
+            this->breakTriggered = false;
+        } else if (!this->ir.currentCfg->current_bb->has_return) {
+            this->ir.currentCfg->current_bb->exit_true = nextBodyBB;
+        }
+    }
+
+    cfg->pop_break_target();
+    cfg->add_bb(afterSwitch);
+    cfg->current_bb = afterSwitch;
 
     return 0;
 }
@@ -142,9 +268,61 @@ antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
 {
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
-        if (this->ir.currentCfg->current_bb->has_return) {
+        if (this->ir.currentCfg->current_bb && this->ir.currentCfg->current_bb->has_return) {
             break;
         }
+    }
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx) 
+{
+    CFG *cfg = this->ir.currentCfg;
+    
+    // Create necessary basic blocks
+    BasicBlock *condBB = new BasicBlock(cfg, cfg->new_BB_name() + "_cond");
+    BasicBlock *bodyBB = new BasicBlock(cfg, cfg->new_BB_name() + "_body");
+    BasicBlock *endBB = new BasicBlock(cfg, cfg->new_BB_name() + "_endwhile");
+
+    // Connect the current block to the condition block
+    cfg->current_bb->exit_true = condBB;
+    cfg->current_bb->exit_false = nullptr;
+
+    // Build condition block
+    cfg->add_bb(condBB);
+    cfg->current_bb = condBB;
+    this->visit(ctx->expr());
+    
+    // Condition block exits
+    condBB->exit_true = bodyBB;
+    condBB->exit_false = endBB;
+
+    // Build body block
+    cfg->add_bb(bodyBB);
+    cfg->current_bb = bodyBB;
+    for (auto stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    
+    // Loop back to condition
+    if (!cfg->current_bb->has_return) {
+        cfg->current_bb->exit_true = condBB;
+        cfg->current_bb->exit_false = nullptr;
+    }
+
+    // Continue building in the endBB
+    cfg->add_bb(endBB);
+    cfg->current_bb = endBB;
+
+    return 0;
+}
+antlrcpp::Any IRGenVisitor::visitBreak_stmt(ifccParser::Break_stmtContext *ctx)
+{
+    BasicBlock *breakTarget = this->ir.currentCfg->get_break_target();
+    if (breakTarget != nullptr) {
+        this->ir.currentCfg->current_bb->exit_true = breakTarget;
+        this->ir.currentCfg->current_bb->exit_false = nullptr;
+        this->breakTriggered = true;
     }
     return 0;
 }

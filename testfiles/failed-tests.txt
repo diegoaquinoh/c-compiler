@@ -1,0 +1,58 @@
+List of tests that are supposed to fail because not yet supported by our compiler:
+
+In chronological order :
+
+1_1
+2_140
+2_141
+2_142
+2_165
+
+2_53
+2_55
+2_66
+2_72
+2_97
+3_13
+
+4_07
+4_11
+4_18
+4_23
+4_40
+
+6_05
+6_10
+7_13
+
+Explanation :
+
+Scope and '{' '}' usage - not yet supported 
+    Tests 1_1 and 4_40
+
+Main declared without "int" (depends on the compiler)
+    Test 4_11 
+
+Main does not support argc and argv 
+    Test 4_07
+
+We don't support -- operator, we consider it as a double negation
+    Tests 2_49 and 2_50
+
+We don't accept empty lines (double semicolon ;;)
+    Tests 4_23
+
+Not implemented && nor || 
+    Test 6_10
+
+Not normal, needs verifying: - Louis' operator priority probably
+    2_140, 2_141, 2_142, 2_165, 2_53, 2_55, 2_66, 2_72, 2_97, 3_13
+
+We still dont support empty returns (return;)
+    Test 4_18
+
+Character problem :
+    Tests 4_04 and 4_25
+
+Not normal but still not functional (problem with if, idk why):
+    Tests 6_05, 7_13
