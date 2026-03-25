@@ -23,7 +23,7 @@ void IR::gen_arm(ostream &o) {
 // CFG // 
 
 int CFG::get_var_index_arm(string name){
-    return -1 * this->SymbolIndex.at(name);
+    return 4 * this->SymbolIndex.at(name);
 }
 
 void CFG::gen_arm_prologue(ostream &o, const string& functionName){
@@ -35,7 +35,7 @@ void CFG::gen_arm_prologue(ostream &o, const string& functionName){
         o << functionName << ":\n";
     #endif
 
-    int size = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
+    int size = static_cast<int>(this->SymbolIndex.size()) * 16 + 16;
 
     // Il faut aligner avec un multiple de 16 pour arm
     this->stackSize = ((size + 15) / 16) * 16; 

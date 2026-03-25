@@ -18,7 +18,7 @@ void IR::gen_x86(ostream &o) {
 // CFG // 
 
 string CFG::IR_reg_to_asm(string reg) {
-    int index = this->get_var_index(reg);
+    int index = this->get_var_index_x86(reg);
     return to_string(index) + "(%rbp)";
 }
 
@@ -34,7 +34,7 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     o << "    pushq %rbp\n";
     o << "    movq %rsp, %rbp\n";
 
-    int stackSize = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
+    int stackSize = static_cast<int>(this->SymbolIndex.size()) * 16 + 16;
     int allocSize = (stackSize + 64 + 15) & ~15;
     if (allocSize > 0) {
         o << "    subq $" << allocSize << ", %rsp\n";
@@ -43,7 +43,17 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     o << "    movl $0, -4(%rbp)\n";
 }
 
-// BasicBlock //
+void CFG::gen_x86_epilogue(ostream &o){
+    o << "    movq %rbp, %rsp\n";
+    o << "    popq %rbp\n";
+    o << "    retq\n";
+}
+
+int CFG::get_var_index_x86(string name){
+    return this->SymbolIndex.at(name) * -4;
+}
+
+// BasicBlock // 
 
 void BasicBlock::gen_x86(ostream &o) {
     o << this->label << ":\n";
@@ -89,15 +99,14 @@ void IRInstr::gen_x86(ostream &o) {
             {
                 // Keep the "!reg" pseudo-variable in sync with the register value.
                 this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
-                index1 = this->bb->cfg->get_var_index(nameVar1);
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
 
                 o << "    movl $" << nb << ", %eax\n";
                 o << "    movl %eax, " << index1 << "(%rbp)\n";
             }
             else {
                 this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
-
-                index1 = this->bb->cfg->get_var_index(nameVar1);
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
 
                 o << "    movl $" << nb << ", " << index1 << "(%rbp)\n";
             }
@@ -111,9 +120,9 @@ void IRInstr::gen_x86(ostream &o) {
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    addl " << index3 << "(%rbp), %eax" << endl;
@@ -128,9 +137,9 @@ void IRInstr::gen_x86(ostream &o) {
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    subl " << index3 << "(%rbp), %eax" << endl;
@@ -144,7 +153,7 @@ void IRInstr::gen_x86(ostream &o) {
             const char* argRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
 
             for (size_t i = 2; i < this->params.size(); i++) {
-                int argIndex = this->bb->cfg->get_var_index(this->params.at(i));
+                int argIndex = this->bb->cfg->get_var_index_x86(this->params.at(i));
                 o << "    movl " << argIndex << "(%rbp), " << argRegs[i - 2] << endl;
             }
 
@@ -159,7 +168,7 @@ void IRInstr::gen_x86(ostream &o) {
 
             // Store return value (%eax) into destination
             this->bb->cfg->add_to_symbol_table(dest, this->t);
-            int destIndex = this->bb->cfg->get_var_index(dest);
+            int destIndex = this->bb->cfg->get_var_index_x86(dest);
             o << "    movl %eax, " << destIndex << "(%rbp)" << endl;
             break;
         }
@@ -171,26 +180,26 @@ void IRInstr::gen_x86(ostream &o) {
             bool destIsReg = (nameVar1 == "!reg");
             bool srcIsReg = (nameVar2 == "!reg");
             if (srcIsReg) {
-                index2 = this->bb->cfg->get_var_index(nameVar2);
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
                 o << "    movl " << index2 << "(%rbp), %eax" << endl;
             }
 
             if (destIsReg) {
                 if (!srcIsReg) {
-                    index2 = this->bb->cfg->get_var_index(nameVar2);
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
                     o << "    movl " << index2 << "(%rbp), %eax" << endl;
                 }
                 this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
-                index1 = this->bb->cfg->get_var_index(nameVar1);
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
                 o << "    movl %eax, " << index1 << "(%rbp)" << endl;
             } else {
                 this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
-                index1 = this->bb->cfg->get_var_index(nameVar1);
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
 
                 if (srcIsReg) {
                     o << "    movl %eax, " << index1 << "(%rbp)" << endl;
                 } else {
-                    index2 = this->bb->cfg->get_var_index(nameVar2);
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
                     o << "    movl " << index2 << "(%rbp), %eax" << endl;
                     o << "    movl %eax, " << index1 << "(%rbp)" << endl;
                 }
@@ -200,13 +209,13 @@ void IRInstr::gen_x86(ostream &o) {
         case IRInstr::rtrn:
             nameVar1 = this->params.at(0);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
 
             o << "    movl " << index1 << "(%rbp), %eax" << endl;
             break;
         case IRInstr::neg:
             nameVar1 = this->params.at(0);
-            index1 = this->bb->cfg->get_var_index(nameVar1);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
             o << "    movl " << index1 << "(%rbp), %eax" << endl;
             o << "    negl %eax" << endl;
             o << "    movl %eax, " << index1 << "(%rbp)" << endl;
@@ -219,9 +228,9 @@ void IRInstr::gen_x86(ostream &o) {
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    imull " << index3 << "(%rbp), %eax" << endl;
@@ -235,9 +244,9 @@ void IRInstr::gen_x86(ostream &o) {
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    cltd" << endl;
@@ -252,9 +261,9 @@ void IRInstr::gen_x86(ostream &o) {
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    cltd" << endl;
@@ -269,8 +278,8 @@ void IRInstr::gen_x86(ostream &o) {
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
 
             o << "    cmpl $0, " << index2 << "(%rbp)" << endl;
             o << "    sete %al" << endl;
@@ -282,9 +291,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
             // Forme : var1 = var2 ^ var3
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    xorl " << index3 << "(%rbp), %eax" << endl;
@@ -295,9 +304,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
             // Forme : var1 = var2 | var3
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    orl " << index3 << "(%rbp), %eax" << endl;
@@ -308,9 +317,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
             // Forme : var1 = var2 & var3
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    andl " << index3 << "(%rbp), %eax" << endl;
@@ -321,9 +330,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
@@ -336,9 +345,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
@@ -351,9 +360,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
@@ -366,9 +375,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
@@ -381,9 +390,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
@@ -396,9 +405,9 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index(nameVar1);
-            index2 = this->bb->cfg->get_var_index(nameVar2);
-            index3 = this->bb->cfg->get_var_index(nameVar3);
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
 
             o << "    movl " << index2 << "(%rbp), %eax" << endl;
             o << "    cmpl " << index3 << "(%rbp), %eax" << endl;

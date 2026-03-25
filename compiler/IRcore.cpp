@@ -44,7 +44,7 @@ void CFG::add_to_symbol_table(string name, Type t){
 
     this->SymbolType[name] = t;
     this->SymbolIndex[name] = this->nextFreeSymbolIndex;
-    this->nextFreeSymbolIndex -= 4;
+    this->nextFreeSymbolIndex += 1;
 }
 
 
@@ -61,10 +61,6 @@ string CFG::create_new_tempvar(Type t){
 
     this->add_to_symbol_table(tempName, t);
     return tempName;
-}
-
-int CFG::get_var_index(string name){
-    return this->SymbolIndex.at(name);
 }
 
 Type CFG::get_var_type(string name){

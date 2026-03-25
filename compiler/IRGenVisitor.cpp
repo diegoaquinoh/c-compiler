@@ -8,7 +8,10 @@ static int getCaseValue(ifccParser::Case_valueContext *ctx) {
 }
 
 string IRGenVisitor::createVariableTmp() {
-    return "!tmp" + to_string(cptTempVariables++);
+    string nameVar = "!tmp" + to_string(cptTempVariables++);
+    // Paramétrer la fonction plus tard pour gérer d'autres types ?
+    this->ir.currentCfg->add_to_symbol_table(nameVar, IntType);
+    return nameVar;
 }
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
@@ -37,7 +40,6 @@ antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
     }
 
     // Epilogue:
-    
 
     return 0;
 }
@@ -46,6 +48,7 @@ antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
+        // réserver de la mémoire ?
     }
     return 0;
 }
@@ -58,6 +61,8 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
         this->visit(ctx->expr());
         vector<string> v = {varName, reg};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+
+        this->ir.currentCfg->add_to_symbol_table(varName, IntType);
     }
 
     return 0;

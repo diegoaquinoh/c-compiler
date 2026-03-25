@@ -11,8 +11,10 @@ using namespace std;
 
 class IRGenVisitor : public ifccBaseVisitor {
 	public:
-        map<string, int> symbolTable;
-        IRGenVisitor(const map<string, int> &symTable) : symbolTable(symTable) {}
+        int nextFreeSymbolIndex;
+        IRGenVisitor() {}
+
+        void add_to_symbol_table(string name, Type t);
 
         virtual string createVariableTmp();
 

@@ -118,7 +118,7 @@ class BasicBlock {
 
 class CFG {
  public:
-	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(-4), nextBBnumber(0) {
+	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(1), nextBBnumber(0) {
 		this->current_bb = nullptr;
 	};
 
@@ -132,6 +132,7 @@ class CFG {
 	string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
 	void gen_x86_prologue(ostream& o, const string& functionName);
 	void gen_x86_epilogue(ostream& o);
+	int get_var_index_x86(string name);
 
 	// arm code generation
 	void gen_arm(ostream& o);
@@ -142,7 +143,6 @@ class CFG {
 	// symbol table methods
 	void add_to_symbol_table(string name, Type t);
 	string create_new_tempvar(Type t);
-	int get_var_index(string name);
 	Type get_var_type(string name);
 
 	// basic block management

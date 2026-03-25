@@ -92,7 +92,7 @@ int main(int argn, const char **argv)
   }
 
   // Second Visitor: generate code using the symbol table
-  IRGenVisitor v(stv.getSymbolTable());
+  IRGenVisitor v;
   v.visit(tree);
 
   switch (archiCible) {
