@@ -75,7 +75,8 @@ void BasicBlock::gen_x86(ostream &o) {
         return;
     }
 
-    o << "    cmpl $0, " << this->cfg->IR_reg_to_asm("!reg") << "\n";
+    //o << "    cmpl $0, " << this->cfg->IR_reg_to_asm("!reg") << "\n";
+    o << "    cmpl $0, %eax\n";
     o << "    je " << this->exit_false->label << "\n";
     o << "    jmp " << this->exit_true->label << "\n";
 }
@@ -95,20 +96,14 @@ void IRInstr::gen_x86(ostream &o) {
         case IRInstr::ldconst:
             nameVar1 = this->params.at(0);
             nb = stoi(this->params.at(1));
-            if(nameVar1 == "!reg")
+            
+            o << "    movl $" << nb << ", %eax\n";
+
+            if(nameVar1 != "!reg")
             {
-                // Keep the "!reg" pseudo-variable in sync with the register value.
                 this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
                 index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-
-                o << "    movl $" << nb << ", %eax\n";
                 o << "    movl %eax, " << index1 << "(%rbp)\n";
-            }
-            else {
-                this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
-                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-
-                o << "    movl $" << nb << ", " << index1 << "(%rbp)\n";
             }
 
             break;
@@ -120,14 +115,19 @@ void IRInstr::gen_x86(ostream &o) {
 
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);            
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    addl " << index3 << "(%rbp), %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            if (nameVar3 != "!reg") {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %eax" << endl;
+            }
 
+            o << "    addl " << index2 << "(%rbp), %eax" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::sub:
             // var1 = var2 - var3
@@ -135,17 +135,27 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            // On s'assure uqe le nombre à soustraire est dans edx peu importe si c'est reg ou pas
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %edx" << endl;
+            } else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %edx" << endl;
+            }
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    subl " << index3 << "(%rbp), %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            o << "    subl %edx, %eax" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
+            
             break;
-
         case IRInstr::call: {
             string dest = this->params.at(0);
             string funcName = this->params.at(1);
@@ -179,62 +189,75 @@ void IRInstr::gen_x86(ostream &o) {
 
             bool destIsReg = (nameVar1 == "!reg");
             bool srcIsReg = (nameVar2 == "!reg");
-            if (srcIsReg) {
-                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+
+            if (destIsReg && srcIsReg) {
+                break;
             }
 
             if (destIsReg) {
-                if (!srcIsReg) {
-                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-                    o << "    movl " << index2 << "(%rbp), %eax" << endl;
-                }
-                this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+                break;
+            }
+
+            if (srcIsReg) {
                 index1 = this->bb->cfg->get_var_index_x86(nameVar1);
                 o << "    movl %eax, " << index1 << "(%rbp)" << endl;
-            } else {
-                this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
-                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-
-                if (srcIsReg) {
-                    o << "    movl %eax, " << index1 << "(%rbp)" << endl;
-                } else {
-                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-                    o << "    movl " << index2 << "(%rbp), %eax" << endl;
-                    o << "    movl %eax, " << index1 << "(%rbp)" << endl;
-                }
+                break;
             }
+
+            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
             break;
         }
         case IRInstr::rtrn:
             nameVar1 = this->params.at(0);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl " << index1 << "(%rbp), %eax" << endl;
+            }
 
-            o << "    movl " << index1 << "(%rbp), %eax" << endl;
             break;
-        case IRInstr::neg:
+        case IRInstr::neg: {
             nameVar1 = this->params.at(0);
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            o << "    movl " << index1 << "(%rbp), %eax" << endl;
+
+            bool isReg = (nameVar1 == "!reg");
+            
+            if (!isReg) {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl " << index1 << "(%rbp), %eax" << endl;
+            }
+            
             o << "    negl %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            
+            if (!isReg) {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
+        }
         case IRInstr::mul:
             // var1 = var2 * var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
-
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
             index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            
+            if (nameVar3 != "!reg") {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %eax" << endl;
+            }
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    imull " << index3 << "(%rbp), %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            o << "    imull " << index2 << "(%rbp), %eax" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::div:
             // Forme : var1 = var2 / var3
@@ -242,16 +265,26 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            // On s'assure que le dénominateur est dans ecx peu importe si c'est reg ou pas
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %ecx" << endl;
+            } else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %ecx" << endl;
+            }
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
-
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
+            
             o << "    cltd" << endl;
-            o << "    idivl " << index3 << "(%rbp)" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            o << "    idivl %ecx" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::mod:
             // Forme : var1 = var2 % var3
@@ -259,161 +292,265 @@ void IRInstr::gen_x86(ostream &o) {
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            // On s'assure que le dénominateur est dans ecx peu importe si c'est reg ou pas
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %ecx" << endl;
+            } else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %ecx" << endl;
+            }
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
-
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
+            
             o << "    cltd" << endl;
-            o << "    idivl " << index3 << "(%rbp)" << endl;
-            o << "    movl %edx, %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            o << "    idivl %ecx" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %edx, " << index1 << "(%rbp)" << endl;
+            } else {
+                o << "    movl %edx, %eax" << endl;
+            }
+
             break;
         case IRInstr::lnot:
             // Forme : var1 = !var2
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
 
-            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            if (nameVar2 == "!reg") {
+                o << "    cmpl $0, %eax" << endl;
+            } else {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    cmpl $0, " << index2 << "(%rbp)" << endl;
+            }
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-
-            o << "    cmpl $0, " << index2 << "(%rbp)" << endl;
             o << "    sete %al" << endl;
             o << "    movzbl %al, %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
+
             break;
         case IRInstr::bxor:
+            // Forme : var1 = var2 ^ var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
-            // Forme : var1 = var2 ^ var3
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    xorl " << index3 << "(%rbp), %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);        
+
+            if (nameVar3 != "!reg") {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    xorl " << index2 << "(%rbp), %eax" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::bor:
+            // Forme : var1 = var2 | var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
-            // Forme : var1 = var2 | var3
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    orl " << index3 << "(%rbp), %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);            
+
+            if (nameVar3 != "!reg") {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    orl " << index2 << "(%rbp), %eax" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::band:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
             index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
-            // Forme : var1 = var2 & var3
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    andl " << index3 << "(%rbp), %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+
+            if (nameVar3 != "!reg") {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    andl " << index2 << "(%rbp), %eax" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::cmp_eq:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %ecx" << endl;
+            }else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %ecx" << endl;
+            }
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    cmpl %ecx, %eax" << endl;
             o << "    sete  %al" << endl;
             o << "    movzbl %al, %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::cmp_ne:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %ecx" << endl;
+            }else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %ecx" << endl;
+            }
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
-            o << "    setne %al" << endl;
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    cmpl %ecx, %eax" << endl;
+            o << "    setne  %al" << endl;
             o << "    movzbl %al, %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::cmp_lt:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %ecx" << endl;
+            }else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %ecx" << endl;
+            }
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
-            o << "    setl %al" << endl;
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    cmpl %ecx, %eax" << endl;
+            o << "    setl  %al" << endl;
             o << "    movzbl %al, %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::cmp_le:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %ecx" << endl;
+            }else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %ecx" << endl;
+            }
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
-            o << "    setle %al" << endl;
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    cmpl %ecx, %eax" << endl;
+            o << "    setle  %al" << endl;
             o << "    movzbl %al, %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::cmp_gt:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %ecx" << endl;
+            }else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %ecx" << endl;
+            }
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
-            o << "    setg %al" << endl;
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    cmpl %ecx, %eax" << endl;
+            o << "    setg  %al" << endl;
             o << "    movzbl %al, %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         case IRInstr::cmp_ge:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
 
-            index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
-            index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+            if (nameVar3 == "!reg") {
+                o << "    movl %eax, %ecx" << endl;
+            }else {
+                index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                o << "    movl " << index3 << "(%rbp), %ecx" << endl;
+            }
 
-            o << "    movl " << index2 << "(%rbp), %eax" << endl;
-            o << "    cmpl " << index3 << "(%rbp), %eax" << endl;
-            o << "    setge %al" << endl;
+            if (nameVar2 != "!reg") {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movl " << index2 << "(%rbp), %eax" << endl;
+            }
+
+            o << "    cmpl %ecx, %eax" << endl;
+            o << "    setge  %al" << endl;
             o << "    movzbl %al, %eax" << endl;
-            o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+
+            if (nameVar1 != "!reg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movl %eax, " << index1 << "(%rbp)" << endl;
+            }
             break;
         default:
             break;

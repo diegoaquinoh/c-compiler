@@ -48,7 +48,6 @@ antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
-        // réserver de la mémoire ?
     }
     return 0;
 }
@@ -56,13 +55,12 @@ antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
     string varName = ctx->VAR()->getText();
+    this->ir.currentCfg->add_to_symbol_table(varName, IntType);
 
     if (ctx->expr()) {
         this->visit(ctx->expr());
         vector<string> v = {varName, reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
-
-        this->ir.currentCfg->add_to_symbol_table(varName, IntType);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);       
     }
 
     return 0;
