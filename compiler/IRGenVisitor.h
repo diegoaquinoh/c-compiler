@@ -10,10 +10,9 @@ using namespace std;
 
 
 class IRGenVisitor : public ifccBaseVisitor {
-	public:
-        map<string, map<string, int>> allSymbolTables;
-        IRGenVisitor(const map<string, map<string, int>> &allSymTables)
-            : allSymbolTables(allSymTables) {}
+    public:
+            using ifccBaseVisitor::visit;
+	        IRGenVisitor() {}
 
         virtual string createVariableTmp();
 
@@ -31,7 +30,10 @@ class IRGenVisitor : public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitIf_stmt(ifccParser::If_stmtContext *ctx) override;
         virtual antlrcpp::Any visitElse_stmt(ifccParser::Else_stmtContext *ctx) override;
+        virtual antlrcpp::Any visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx) override;
+        virtual antlrcpp::Any visitBreak_stmt(ifccParser::Break_stmtContext *ctx) override;
         // Expression visitors
+
         virtual antlrcpp::Any visitNegative(ifccParser::NegativeContext *ctx) override;
         virtual antlrcpp::Any visitParens(ifccParser::ParensContext *ctx) override;
 
@@ -49,7 +51,9 @@ class IRGenVisitor : public ifccBaseVisitor {
         virtual antlrcpp::Any visitEquality(ifccParser::EqualityContext *ctx) override;
 
         virtual antlrcpp::Any visitLogicalnot(ifccParser::LogicalnotContext *ctx) override;
-        // Return statement visitor
+
+        virtual antlrcpp::Any visitWhile_stmt(ifccParser::While_stmtContext *ctx) override;
+
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
 
         // Scope management for variable renaming
@@ -63,6 +67,7 @@ class IRGenVisitor : public ifccBaseVisitor {
         private:
                 int cptTempVariables = 0;
                 int scopeCounter = 0;
+                bool breakTriggered = false;
                 IR ir;
                 // Scope stack: each entry maps source name -> scoped IR name
                 vector<map<string, string>> scopeStack;

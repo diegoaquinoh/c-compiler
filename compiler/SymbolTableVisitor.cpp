@@ -63,15 +63,6 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
     for (auto *func : ctx->func_def()) {
         this->visit(func);
     }
-
-    // Check that every declared variable is used at least once
-    for (auto &funcTable : allSymbolTables) {
-        for (auto &[name, idx] : funcTable.second) {
-            if (!usedVars.count(name)) {
-                cerr << "warning: variable '" << name << "' declared but never used\n";
-            }
-        }
-    }
     return 0;
 }
 
@@ -112,6 +103,13 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
     // Visit the function body block (block will handle its own scope)
     this->visit(ctx->block());
 
+    for (auto &[name, idx] : allSymbolTables[currentFunction]) {
+        (void)idx;
+        if (!usedVars.count(name)) {
+            cerr << "warning: variable '" << name << "' declared but never used\n";
+        }
+    }
+
     exitScope();
     currentFunction = "";
     return 0;
@@ -141,11 +139,66 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *c
     return 0;
 }
 
+antlrcpp::Any SymbolTableVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx) {
+    this->visit(ctx->expr());
+    enterScope();
+    for (auto *clause : ctx->switch_clause()) {
+        this->visit(clause);
+    }
+    exitScope();
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitSwitch_clause(ifccParser::Switch_clauseContext *ctx) {
+    if (ctx->case_label()) {
+        this->visit(ctx->case_label());
+    }
+    if (ctx->default_label()) {
+        this->visit(ctx->default_label());
+    }
+    for (auto *stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitCase_label(ifccParser::Case_labelContext *ctx) {
+    this->visit(ctx->case_value());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitDefault_label(ifccParser::Default_labelContext *ctx) {
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitCase_value(ifccParser::Case_valueContext *ctx) {
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitBreak_stmt(ifccParser::Break_stmtContext *ctx) {
+    return 0;
+}
+
 antlrcpp::Any SymbolTableVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx) {
     useVar(ctx->VAR()->getText());
     if (ctx->expr()) {
         this->visit(ctx->expr());
     }
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx) {
+    this->visit(ctx->expr());
+    this->visit(ctx->block());
+    if (ctx->else_stmt()) {
+        this->visit(ctx->else_stmt());
+    }
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx) {
+    this->visit(ctx->block());
     return 0;
 }
 
@@ -190,12 +243,32 @@ antlrcpp::Any SymbolTableVisitor::visitAddsub(ifccParser::AddsubContext *ctx) {
 }
 
 antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx) {
+    ifccParser::ExprContext *operand = ctx->expr();
+
+    if (dynamic_cast<ifccParser::NegativeContext *>(operand) != nullptr) {
+        cerr << "error: double negation is not allowed\n";
+        errorFlag = true;
+        return 0;
+    }
+
+    this->visit(operand);
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx){
     this->visit(ctx->expr());
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitParens(ifccParser::ParensContext *ctx) {
     this->visit(ctx->expr());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitConst(ifccParser::ConstContext *ctx) {
+    (void)ctx;
+
     return 0;
 }
 
@@ -219,5 +292,29 @@ antlrcpp::Any SymbolTableVisitor::visitBitwisexor(ifccParser::BitwisexorContext 
 antlrcpp::Any SymbolTableVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx) {
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitRelational(ifccParser::RelationalContext *ctx){
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitEquality(ifccParser::EqualityContext *ctx){
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx) {
+    this->visit(ctx->expr());
+    enterScope();
+    for (auto stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    exitScope();
     return 0;
 }

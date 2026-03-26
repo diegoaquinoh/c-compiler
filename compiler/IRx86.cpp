@@ -52,6 +52,15 @@ void CFG::gen_x86_epilogue(ostream &o){
     o << "    retq\n";
 }
 
+string CFG::IR_reg_to_asm(string reg) {
+    int index = this->get_var_index_x86(reg);
+    return to_string(index) + "(%rbp)";
+}
+
+int CFG::get_var_index_x86(string name){
+    return this->get_var_index(name);
+}
+
 // BasicBlock // 
 
 void BasicBlock::gen_x86(ostream &o) {

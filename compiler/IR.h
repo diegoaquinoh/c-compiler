@@ -47,9 +47,9 @@ class IRInstr {
 	} Operation;
 
 
-	/**  constructor */
 	IRInstr(BasicBlock* bb_, Operation op, Type t, vector<string> params) : bb(bb_), op(op), t(t), params(params) {};
-	
+	IRInstr(BasicBlock* bb_, Operation op) : bb(bb_), op(op), t(Type::IntType), params({}) {};
+
 	/** Actual code generation */
 	void gen_x86(ostream &o); /**< x86 assembly code generation for this IR instruction */
 	void gen_arm(ostream &o);
@@ -85,7 +85,7 @@ class IRInstr {
 					followed by a conditional branch to the exit_false branch,
 					followed by an unconditional branch to the exit_true branch
 	 The attribute test_var_name itself is defined when converting 
-  the if, while, etc of the AST  to IR.
+  the if, while, switch-case dispatch, etc of the AST to IR.
 
 Possible optimization:
      a cmp_* comparison instructions, if it is the last instruction of its block, 
@@ -101,8 +101,8 @@ class BasicBlock {
 	string toString() const;
 
 	void add_IRInstr(IRInstr::Operation op, Type t, vector<string> params);
+	void add_IRInstr(IRInstr::Operation op);
 
-	// No encapsulation whatsoever here. Feel free to do better.
 	BasicBlock* exit_true;  /**< pointer to the next basic block, true branch. If nullptr, return from procedure */ 
 	BasicBlock* exit_false; /**< pointer to the next basic block, false branch. If null_ptr, the basic block ends with an unconditional jump */
 	string label; /**< label of the BB, also will be the label in the generated code */
@@ -116,18 +116,6 @@ class BasicBlock {
  
 };
 
-
-
-
-/** The class for the control flow graph, also includes the symbol table */
-
-/* A few important comments:
-	 The entry block is the one with the same label as the AST function name.
-	   (it could be the first of bbs, or it could be defined by an attribute value)
-	 The exit block is the one with both exit pointers equal to nullptr.
-     (again it could be identified in a more explicit way)
-
- */
 class CFG {
  public:
 	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(-4), nextBBnumber(0) {
@@ -139,11 +127,13 @@ class CFG {
 	void add_bb(BasicBlock* bb);
 
 	// x86 code generation: could be encapsulated in a processor class in a retargetable compiler
-	void gen_x86(ostream& o);
-	string toString() const;
-	string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
-	void gen_x86_prologue(ostream& o);
-	void gen_x86_epilogue(ostream& o);
+		void gen_x86(ostream& o);
+		string toString() const;
+		string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
+		void gen_x86_prologue(ostream& o);
+		void gen_x86_epilogue(ostream& o);
+		int get_var_index(string name);
+		int get_var_index_x86(string name);
 
 	// arm code generation
 	void gen_arm(ostream& o);
@@ -154,12 +144,14 @@ class CFG {
 	// symbol table methods
 	void add_to_symbol_table(string name, Type t);
 	string create_new_tempvar(Type t);
-	int get_var_index(string name);
 	Type get_var_type(string name);
 
 	// basic block management
 	string new_BB_name();
 	BasicBlock* current_bb;
+	void push_break_target(BasicBlock* bb);
+	void pop_break_target();
+	BasicBlock* get_break_target() const;
 
 	// function metadata
 	string functionName;
@@ -173,6 +165,7 @@ class CFG {
 	int nextBBnumber; /**< just for naming */
 
 	vector <BasicBlock*> bbs; /**< all the basic blocks of this CFG*/
+	vector <BasicBlock*> breakTargets; /**< stack of break targets for nested switch/loop constructs */
 };
 
 
