@@ -118,25 +118,26 @@ class BasicBlock {
 
 class CFG {
  public:
-	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(1), nextBBnumber(0) {
+	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(-4), nextBBnumber(0) {
 		this->current_bb = nullptr;
 	};
 
 	IR* ast; /**< The AST this CFG comes from */
-	
+
 	void add_bb(BasicBlock* bb);
 
 	// x86 code generation: could be encapsulated in a processor class in a retargetable compiler
-	void gen_x86(ostream& o);
-	string toString() const;
-	string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
-	void gen_x86_prologue(ostream& o, const string& functionName);
-	void gen_x86_epilogue(ostream& o);
-	int get_var_index_x86(string name);
+		void gen_x86(ostream& o);
+		string toString() const;
+		string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
+		void gen_x86_prologue(ostream& o);
+		void gen_x86_epilogue(ostream& o);
+		int get_var_index(string name);
+		int get_var_index_x86(string name);
 
 	// arm code generation
 	void gen_arm(ostream& o);
-	void gen_arm_prologue(ostream& o, const string& functionName);
+	void gen_arm_prologue(ostream& o);
 	void gen_arm_epilogue(ostream& o);
 	int get_var_index_arm(string name);
 
@@ -152,13 +153,17 @@ class CFG {
 	void pop_break_target();
 	BasicBlock* get_break_target() const;
 
+	// function metadata
+	string functionName;
+	vector<string> paramNames;
+
  protected:
 	map <string, Type> SymbolType; /**< part of the symbol table  */
 	map <string, int> SymbolIndex; /**< part of the symbol table  */
 	int stackSize = 0;
 	int nextFreeSymbolIndex; /**< to allocate new symbols in the symbol table */
 	int nextBBnumber; /**< just for naming */
-	
+
 	vector <BasicBlock*> bbs; /**< all the basic blocks of this CFG*/
 	vector <BasicBlock*> breakTargets; /**< stack of break targets for nested switch/loop constructs */
 };

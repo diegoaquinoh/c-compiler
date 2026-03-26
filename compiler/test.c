@@ -1,8 +1,11 @@
 int main() {
-    int a = 1;
-    if(a) {
-        return 16;
-        return 17;
+    int x = 1;
+    if (x) {
+        int a = 2; 
+        return a;
+    } else {
+        int a = 5;
+        return a;
     }
-    return 18;
+    return 0;
 }

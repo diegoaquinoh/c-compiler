@@ -2,7 +2,11 @@ grammar ifcc;
 
 axiom : prog EOF ;
 
-prog : 'int' 'main' '(' ')' '{' stmt* '}' ;
+prog : func_def+ ;
+
+func_def : TYPE VAR '(' param_list? ')' block ;
+
+param_list : TYPE VAR (',' TYPE VAR)* ;
 
 stmt : decl_stmt
      | expr ';'
@@ -13,11 +17,13 @@ stmt : decl_stmt
      | return_stmt
      ;
 
-decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
+decl_stmt : TYPE decl_item (',' decl_item)* ';' ;
 decl_item : VAR ('=' expr)? ;
 
-if_stmt: 'if' '(' expr ')' '{' stmt* '}' (else_stmt)? ;
-else_stmt: 'else' '{' stmt* '}' ;
+if_stmt: 'if' '(' expr ')' block (else_stmt)? ;
+else_stmt: 'else' block ;
+
+block : '{' stmt* '}' ;
 
 while_stmt: 'while' '(' expr ')' '{' stmt* '}' ;
 switch_stmt : 'switch' '(' expr ')' '{' switch_clause* '}' ;
@@ -48,6 +54,7 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      ;
 
 RETURN : 'return' ;
+TYPE : 'int' | 'void' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
 CONST : [0-9]+ ;
 CHAR_CONST : '\'' ( '\\' . | ~['\\] ) '\'' ;
