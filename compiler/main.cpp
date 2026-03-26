@@ -62,6 +62,7 @@ int main(int argn, const char **argv)
   IRGenVisitor v(stv.getAllSymbolTables());
   v.visit(tree);
 
-  v.getIR().gen_arm(std::cout);
+  //v.getIR().gen_arm(std::cout);
+  v.getIR().gen_x86(std::cout);
   return 0;
 }

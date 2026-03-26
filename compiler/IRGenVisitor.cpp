@@ -188,12 +188,12 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 {
-
     CFG *cfg = this->ir.currentCfg;
-    BasicBlock *trueBB = new BasicBlock(cfg, cfg->new_BB_name() + "_true");
-    BasicBlock *nextBB = this->ir.currentCfg->current_bb->exit_true;
     BasicBlock* currentBB = cfg->current_bb;
 
+    BasicBlock *trueBB = new BasicBlock(cfg, cfg->new_BB_name() + "_true");
+    BasicBlock *afterBB = new BasicBlock(cfg, cfg->new_BB_name() + "_after");
+    afterBB->exit_true = currentBB->exit_true; // inherit continuation chain
 
     BasicBlock *elseBB = nullptr;
     if (ctx->else_stmt()) {
@@ -201,28 +201,30 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
     }
 
     currentBB->exit_true = trueBB;
-    currentBB->exit_false = (elseBB != nullptr) ? elseBB : nextBB;
+    currentBB->exit_false = (elseBB != nullptr) ? elseBB : afterBB;
 
     this->visit(ctx->expr());
     currentBB->test_var_name = reg;
 
     cfg->add_bb(trueBB);
+    cfg->current_bb->exit_true = afterBB; // default continuation
 
     // Visit the if block
     this->visit(ctx->block());
-    if (!this->ir.currentCfg->current_bb->has_return) {
-        this->ir.currentCfg->current_bb->exit_true = nextBB;
+    if (!cfg->current_bb->has_return) {
+        cfg->current_bb->exit_true = afterBB;
     }
 
     if (elseBB) {
         cfg->add_bb(elseBB);
+        cfg->current_bb->exit_true = afterBB; // default continuation
         this->visit(ctx->else_stmt());
-        if (!this->ir.currentCfg->current_bb->has_return) {
-            this->ir.currentCfg->current_bb->exit_true = nextBB;
+        if (!cfg->current_bb->has_return) {
+            cfg->current_bb->exit_true = afterBB;
         }
     }
 
-    cfg->current_bb = nextBB;
+    cfg->add_bb(afterBB); // sets current_bb = afterBB
 
     return 0;
 }
