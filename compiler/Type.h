@@ -1,2 +1,7 @@
 #pragma once
-typedef enum {IntType} Type;
+
+typedef enum {
+	IntType,
+	DoubleType
+} Type;
+

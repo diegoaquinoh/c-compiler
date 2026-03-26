@@ -91,8 +91,7 @@ void CFG::gen_arm(ostream &o) {
 }
 
 
-void IRInstr::gen_arm(ostream &o) {
-    std::string nameVar1, nameVar2, nameVar3;
+void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
     int nb;
     int index1, index2, index3;
     switch(this->op) {

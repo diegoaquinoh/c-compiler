@@ -1,16 +1,106 @@
 #include "IRGenVisitor.h"
+
 using namespace std;
 
-string reg = "!reg";
+static const string ireg = "!reg";
+static const string freg = "!freg";
 
 static int getCaseValue(ifccParser::Case_valueContext *ctx) {
     return stoi(ctx->getText());
 }
 
-string IRGenVisitor::createVariableTmp() {
+string IRGenVisitor::activeReg(Type t) const {
+    // On reserve !reg aux entiers et !freg aux doubles.
+    return (t == DoubleType) ? freg : ireg;
+}
+
+Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
+    if (ctx == nullptr) {
+        return IntType;
+    }
+
+    if (auto *c = dynamic_cast<ifccParser::ConstContext *>(ctx)) {
+        return c->DOUBLE_CONST() ? DoubleType : IntType;
+    }
+
+    if (dynamic_cast<ifccParser::FuncCallContext *>(ctx)) {
+        return IntType;
+    }
+
+    if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
+        string irName = scopedName(v->VAR()->getText());
+        return this->ir.currentCfg->get_var_type(irName);
+    }
+
+    if (auto *p = dynamic_cast<ifccParser::ParensContext *>(ctx)) {
+        return inferExprType(p->expr());
+    }
+
+    if (auto *n = dynamic_cast<ifccParser::NegativeContext *>(ctx)) {
+        return inferExprType(n->expr());
+    }
+
+    if (dynamic_cast<ifccParser::LogicalnotContext *>(ctx)) {
+        return IntType;
+    }
+
+    if (auto *m = dynamic_cast<ifccParser::MultdivContext *>(ctx)) {
+        if (m->OP->getText() == "%") {
+            return IntType;
+        }
+        Type lhs = inferExprType(m->expr(0));
+        Type rhs = inferExprType(m->expr(1));
+        return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
+    }
+
+    if (auto *a = dynamic_cast<ifccParser::AddsubContext *>(ctx)) {
+        Type lhs = inferExprType(a->expr(0));
+        Type rhs = inferExprType(a->expr(1));
+        return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
+    }
+
+    if (dynamic_cast<ifccParser::RelationalContext *>(ctx) ||
+        dynamic_cast<ifccParser::EqualityContext *>(ctx) ||
+        dynamic_cast<ifccParser::BitwiseandContext *>(ctx) ||
+        dynamic_cast<ifccParser::BitwisexorContext *>(ctx) ||
+        dynamic_cast<ifccParser::BitwiseorContext *>(ctx)) {
+        return IntType;
+    }
+
+    return IntType;
+}
+
+void IRGenVisitor::emitConvert(Type src, Type dst, const string &srcName, const string &dstName) {
+    // Conversion explicite au niveau IR quand les types source/destination different.
+    if (src == dst) {
+        if (srcName != dstName) {
+            vector<string> copy = {dstName, srcName};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, src, copy);
+        }
+        return;
+    }
+
+    if (src == IntType && dst == DoubleType) {
+        vector<string> conv = {dstName, srcName};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::itod, DoubleType, conv);
+        return;
+    }
+
+    if (src == DoubleType && dst == IntType) {
+        // Toujours vraie cette condition ?
+        vector<string> conv = {dstName, srcName};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::dtoi, IntType, conv);
+    }
+}
+
+void IRGenVisitor::ensureValueInReg(Type currentType, Type targetType) {
+    // la valeur courante est placee dans le registre correspondant a targetType.
+    emitConvert(currentType, targetType, activeReg(currentType), activeReg(targetType));
+}
+
+string IRGenVisitor::createVariableTmp(Type t) {
     string nameVar = "!tmp" + to_string(cptTempVariables++);
-    // Paramétrer la fonction plus tard pour gérer d'autres types ?
-    this->ir.currentCfg->add_to_symbol_table(nameVar, IntType);
+    this->ir.currentCfg->add_to_symbol_table(nameVar, t);
     return nameVar;
 }
 
@@ -74,11 +164,14 @@ antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
 
     // Register parameter names
     if (ctx->param_list()) {
-        for (auto *param : ctx->param_list()->VAR()) {
-            string paramName = param->getText();
+        auto params = ctx->param_list()->VAR();
+        auto types = ctx->param_list()->TYPE();
+        for (size_t i = 0; i < params.size(); i++) {
+            string paramName = params[i]->getText();
             string irName = declareScoped(paramName);
             cfg->paramNames.push_back(irName);
-            cfg->add_to_symbol_table(irName, IntType);
+            Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
+            cfg->add_to_symbol_table(irName, paramType);
         }
     }
 
@@ -110,10 +203,10 @@ antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
     if (!cfg->current_bb->has_return) {
         string retType = ctx->TYPE()->getText();
         if (retType == "int") {
-            vector<string> loadZero = {reg, "0"};
+            vector<string> loadZero = {ireg, "0"};
             cfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, loadZero);
 
-            vector<string> retZero = {reg};
+            vector<string> retZero = {ireg};
             cfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, retZero);
             cfg->current_bb->has_return = true;
         }
@@ -134,12 +227,14 @@ antlrcpp::Any IRGenVisitor::visitBlock(ifccParser::BlockContext *ctx)
             break;
         }
     }
+
     exitScope();
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
+    currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
     }
@@ -150,12 +245,15 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
     string varName = ctx->VAR()->getText();
     string irName = declareScoped(varName);
-    this->ir.currentCfg->add_to_symbol_table(irName, IntType);
+    this->ir.currentCfg->add_to_symbol_table(irName, currentDeclType);
 
     if (ctx->expr()) {
+        // Initialisation: evaluer l'expression, convertir si besoin, puis copier vers la variable.
+        Type exprType = inferExprType(ctx->expr());
         this->visit(ctx->expr());
-        vector<string> v = {irName, reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+        ensureValueInReg(exprType, currentDeclType);
+        vector<string> v = {irName, activeReg(currentDeclType)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, currentDeclType, v);
     }
 
     return 0;
@@ -165,24 +263,35 @@ antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 {
     string varName = ctx->VAR()->getText();
     string irName = scopedName(varName);
+    Type varType = this->ir.currentCfg->get_var_type(irName);
 
+    // le type cible est celui de la variable de gauche
+    Type exprType = inferExprType(ctx->expr());
     this->visit(ctx->expr());
+    ensureValueInReg(exprType, varType);
 
-    vector<string> v = {irName, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    vector<string> v = {irName, activeReg(varType)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, v);
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx)
 {
+    if (ctx->DOUBLE_CONST()) {
+        // Les constantes double sont chargees dans !freg
+        vector<string> v = {freg, ctx->DOUBLE_CONST()->getText()};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, DoubleType, v);
+        return 0;
+    }
+
     int val;
     if (ctx->CONST()) {
         val = stoi(ctx->CONST()->getText());
     } else {
-        string token = ctx->CHAR_CONST()->getText(); // e.g. "'a'"
+        string token = ctx->CHAR_CONST()->getText();
         if (token[1] == '\\') {
-            switch(token[2]) {
+            switch (token[2]) {
                 case 'n':  val = '\n'; break;
                 case 't':  val = '\t'; break;
                 case 'r':  val = '\r'; break;
@@ -195,7 +304,8 @@ antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx)
             val = token[1];
         }
     }
-    vector<string> v = {reg, to_string(val)};
+
+    vector<string> v = {ireg, to_string(val)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, v);
     return 0;
 }
@@ -204,9 +314,10 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 {
     string varName = ctx->VAR()->getText();
     string irName = scopedName(varName);
+    Type varType = this->ir.currentCfg->get_var_type(irName);
 
-    vector<string> v = {reg, irName};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    vector<string> v = {activeReg(varType), irName};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, v);
 
     return 0;
 }
@@ -223,12 +334,19 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
         elseBB = new BasicBlock(cfg, cfg->new_BB_name() + "_else");
     }
 
+    Type condType = inferExprType(ctx->expr());
     // Evaluate the condition in the current block
     this->visit(ctx->expr());
-    string ifCondValue = createVariableTmp();
-    vector<string> saveIfCond = {ifCondValue, reg};
-    testBB->add_IRInstr(IRInstr::copy, IntType, saveIfCond);
-    testBB->test_var_name = ifCondValue;
+    if (condType == DoubleType) {
+        // if attend un booleen entier (sot 0 soit 1 donc) 
+        // Si on a un double, on genere (expr != 0.0) (comme si on "castait" la condition en double)
+        string zeroTmp = createVariableTmp(DoubleType);
+        vector<string> z = {zeroTmp, "0.0"};
+        cfg->current_bb->add_IRInstr(IRInstr::ldconst, DoubleType, z);
+        vector<string> cmp = {ireg, freg, zeroTmp};
+        cfg->current_bb->add_IRInstr(IRInstr::cmp_ne, DoubleType, cmp);
+    }
+    testBB->test_var_name = ireg;
 
     // Link testBB
     testBB->exit_true = trueBB;
@@ -270,8 +388,8 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
     this->breakTriggered = false;
 
     this->visit(ctx->expr());
-    string switchValue = createVariableTmp();
-    vector<string> saveSwitchValue = {switchValue, reg};
+    string switchValue = createVariableTmp(IntType);
+    vector<string> saveSwitchValue = {switchValue, ireg};
     entryBB->add_IRInstr(IRInstr::copy, IntType, saveSwitchValue);
 
     auto clauses = ctx->switch_clause();
@@ -315,19 +433,17 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
 
         cfg->add_bb(testBB);
 
-        string caseValueVar = createVariableTmp();
+        string caseValueVar = createVariableTmp(IntType);
         vector<string> loadCaseValue = {
             caseValueVar,
             to_string(getCaseValue(clauses[caseClauseIndexes[i]]->case_label()->case_value()))
         };
         testBB->add_IRInstr(IRInstr::ldconst, IntType, loadCaseValue);
 
-        vector<string> compareCase = {reg, switchValue, caseValueVar};
+        vector<string> compareCase = {ireg, switchValue, caseValueVar};
         testBB->add_IRInstr(IRInstr::cmp_eq, IntType, compareCase);
-        string caseCondValue = createVariableTmp();
-        vector<string> saveCaseCond = {caseCondValue, reg};
-        testBB->add_IRInstr(IRInstr::copy, IntType, saveCaseCond);
-        testBB->test_var_name = caseCondValue;
+        testBB->test_var_name = ireg;
+        testBB->test_var_name = ireg;
         testBB->exit_true = caseBodyBB;
         testBB->exit_false = nextTestBB;
     }
@@ -373,7 +489,7 @@ antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
 antlrcpp::Any IRGenVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx) 
 {
     CFG *cfg = this->ir.currentCfg;
-    
+
     // Create necessary basic blocks
     BasicBlock *condBB = new BasicBlock(cfg, cfg->new_BB_name() + "_cond");
     BasicBlock *bodyBB = new BasicBlock(cfg, cfg->new_BB_name() + "_body");
@@ -386,12 +502,18 @@ antlrcpp::Any IRGenVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx)
     // Build condition block
     cfg->add_bb(condBB);
     cfg->current_bb = condBB;
+
+    Type condType = inferExprType(ctx->expr());
     this->visit(ctx->expr());
-    string whileCondValue = createVariableTmp();
-    vector<string> saveWhileCond = {whileCondValue, reg};
-    condBB->add_IRInstr(IRInstr::copy, IntType, saveWhileCond);
-    condBB->test_var_name = whileCondValue;
-    
+    if (condType == DoubleType) {
+        // Meme principe que pour if "caster" la condition double en entier via != 0.0.
+        string zeroTmp = createVariableTmp(DoubleType);
+        vector<string> z = {zeroTmp, "0.0"};
+        cfg->current_bb->add_IRInstr(IRInstr::ldconst, DoubleType, z);
+        vector<string> cmp = {ireg, freg, zeroTmp};
+        cfg->current_bb->add_IRInstr(IRInstr::cmp_ne, DoubleType, cmp);
+    }
+    condBB->test_var_name = ireg;
     // Condition block exits
     condBB->exit_true = bodyBB;
     condBB->exit_false = endBB;
@@ -426,6 +548,7 @@ antlrcpp::Any IRGenVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx)
 
     return 0;
 }
+
 antlrcpp::Any IRGenVisitor::visitBreak_stmt(ifccParser::Break_stmtContext *ctx)
 {
     BasicBlock *breakTarget = this->ir.currentCfg->get_break_target();
@@ -437,11 +560,15 @@ antlrcpp::Any IRGenVisitor::visitBreak_stmt(ifccParser::Break_stmtContext *ctx)
     return 0;
 }
 
-
 antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
+    Type exprType = inferExprType(ctx->expr());
     this->visit(ctx->expr());
-    vector<string> v = {reg};
+
+    // main doit retourner un int : on caste si l'expression donne un double
+    ensureValueInReg(exprType, IntType);
+
+    vector<string> v = {ireg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, v);
     this->ir.currentCfg->current_bb->has_return = true;
     this->ir.currentCfg->current_bb->exit_true = nullptr;
@@ -452,54 +579,130 @@ antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx
 antlrcpp::Any IRGenVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
 {
     auto op = ctx->OP->getText();
-    this->visit(ctx->expr(0));
 
-    string indexTmp = createVariableTmp();
-    vector<string> v = {indexTmp, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    Type lhsType = inferExprType(ctx->expr(0));
+    Type rhsType = inferExprType(ctx->expr(1));
+    // Modulo ne fonctionne qu'avec des entiers, div et mult peu importe on peut caster
+    Type resultType = (op == "%") ? IntType : ((lhsType == DoubleType || rhsType == DoubleType) ? DoubleType : IntType);
+
+    this->visit(ctx->expr(0));
+    string lhsTmp = createVariableTmp(lhsType);
+    vector<string> saveLhs = {lhsTmp, activeReg(lhsType)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, lhsType, saveLhs);
 
     this->visit(ctx->expr(1));
 
+    string lhsOp = lhsTmp;
+    string rhsOp = activeReg(rhsType);
+
+    if (resultType == DoubleType) {
+        // Si on veut un résultat double, il convertir chacune des opérandes en double
+
+        // Si on fait la conversion de lhs juste après, on va écraser la valeur de freg
+        if (rhsType == DoubleType && lhsType == IntType) {
+            string rhsTmp = createVariableTmp(DoubleType);
+            vector<string> saveRhs = {rhsTmp, freg};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, DoubleType, saveRhs);
+            rhsOp = rhsTmp;
+        }
+
+        if (lhsType == IntType) {
+            string lhsDouble = createVariableTmp(DoubleType);
+            emitConvert(IntType, DoubleType, lhsTmp, lhsDouble);
+            lhsOp = lhsDouble;
+        }
+        if (rhsType == IntType) {
+            string rhsDouble = createVariableTmp(DoubleType);
+            emitConvert(IntType, DoubleType, ireg, rhsDouble);
+            rhsOp = rhsDouble;
+        }
+
+        vector<string> args = {freg, lhsOp, rhsOp};
+        if (op == "*") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, DoubleType, args);
+        } else if (op == "/") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::div, DoubleType, args);
+        }
+        return 0;
+    }
+
+    // On attend un résultat entier
+    vector<string> args = {ireg, lhsOp, rhsOp};
     if (op == "*") {
-        vector<string> v2 = {reg, indexTmp, reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, v2);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, args);
     } else if (op == "/") {
-        vector<string> v3 = {reg, indexTmp, reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::div, IntType, v3);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::div, IntType, args);
     } else if (op == "%") {
-        vector<string> v4 = {reg, indexTmp, reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mod, IntType, v4);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mod, IntType, args);
     }
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
-{
+{  
+    // Pareil que pour mult, div et modulo : 
+    // En fonction du typedes opérandes on détermine le type résultat 
     auto op = ctx->OP->getText();
-    this->visit(ctx->expr(0));
 
-    string indexTmp = createVariableTmp();
-    vector<string> v = {indexTmp, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    Type lhsType = inferExprType(ctx->expr(0));
+    Type rhsType = inferExprType(ctx->expr(1));
+    Type resultType = (lhsType == DoubleType || rhsType == DoubleType) ? DoubleType : IntType;
+
+    this->visit(ctx->expr(0));
+    string lhsTmp = createVariableTmp(lhsType);
+    vector<string> saveLhs = {lhsTmp, activeReg(lhsType)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, lhsType, saveLhs);
 
     this->visit(ctx->expr(1));
 
+    string lhsOp = lhsTmp;
+    string rhsOp = activeReg(rhsType);
+
+    if (resultType == DoubleType) {
+        // Si on fait la conversion de lhs juste après, on va écraser la valeur de freg
+        if (rhsType == DoubleType && lhsType == IntType) {
+            string rhsTmp = createVariableTmp(DoubleType);
+            vector<string> saveRhs = {rhsTmp, freg};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, DoubleType, saveRhs);
+            rhsOp = rhsTmp;
+        }
+
+        if (lhsType == IntType) {
+            string lhsDouble = createVariableTmp(DoubleType);
+            emitConvert(IntType, DoubleType, lhsTmp, lhsDouble);
+            lhsOp = lhsDouble;
+        }
+        if (rhsType == IntType) {
+            string rhsDouble = createVariableTmp(DoubleType);
+            emitConvert(IntType, DoubleType, ireg, rhsDouble);
+            rhsOp = rhsDouble;
+        }
+
+        vector<string> args = {freg, lhsOp, rhsOp};
+        if (op == "+") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, DoubleType, args);
+        } else {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, DoubleType, args);
+        }
+        return 0;
+    }
+
+    vector<string> args = {ireg, lhsOp, rhsOp};
     if (op == "+") {
-        vector<string> v2 = {string(reg), indexTmp, string(reg)};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, IntType, v2);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, IntType, args);
     } else {
-        vector<string> v3 = {reg, indexTmp, reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, v3);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, args);
     }
 
     return 0;
 }
 
-antlrcpp::Any IRGenVisitor::visitNegative(ifccParser::NegativeContext *ctx){
+antlrcpp::Any IRGenVisitor::visitNegative(ifccParser::NegativeContext *ctx) {
+    Type exprType = inferExprType(ctx->expr());
     this->visit(ctx->expr());
-    vector<string> v = {reg, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::neg, IntType, v);
+    vector<string> v = {activeReg(exprType), activeReg(exprType)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::neg, exprType, v);
     return 0;
 }
 
@@ -510,26 +713,26 @@ antlrcpp::Any IRGenVisitor::visitParens(ifccParser::ParensContext *ctx){
 
 antlrcpp::Any IRGenVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
     this->visit(ctx->expr(0));
-    string varName = createVariableTmp();
-    vector<string> v = {varName, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    string lhsTmp = createVariableTmp(IntType);
+    vector<string> saveLhs = {lhsTmp, ireg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, saveLhs);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::band, IntType, v2);
+    vector<string> args = {ireg, lhsTmp, ireg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::band, IntType, args);
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
     this->visit(ctx->expr(0));
-    string varName = createVariableTmp();
-    vector<string> v = {varName, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    string lhsTmp = createVariableTmp(IntType);
+    vector<string> saveLhs = {lhsTmp, ireg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, saveLhs);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bxor, IntType, v2);
+    vector<string> args = {ireg, lhsTmp, ireg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bxor, IntType, args);
 
     return 0;
 }
@@ -537,13 +740,13 @@ antlrcpp::Any IRGenVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
 antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
 
     this->visit(ctx->expr(0));
-    string varName = createVariableTmp();
-    vector<string> v = {varName, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    string lhsTmp = createVariableTmp(IntType);
+    vector<string> saveLhs = {lhsTmp, ireg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, saveLhs);
 
     this->visit(ctx->expr(1));
-    vector<string> v2 = {reg, varName, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bor, IntType, v2);
+    vector<string> args = {ireg, lhsTmp, ireg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::bor, IntType, args);
 
     return 0;
 }
@@ -553,77 +756,144 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     auto args = ctx->expr();
 
     // 1. Evaluate each arg and save to temp stack slots
-    vector<string> varTempNames;
+    vector<string> argTempNames;
     for (auto *arg : args) {
+        Type argType = inferExprType(arg);
         this->visit(arg);
-        string varTempName = createVariableTmp();
-        vector<string> v = {varTempName, reg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
-        varTempNames.push_back(varTempName);
+
+        // Pour l'instant avec notre ABI, on ne peut avoir que des paramètres en int
+        ensureValueInReg(argType, IntType);
+
+        string tempName = createVariableTmp(IntType);
+        vector<string> copyArg = {tempName, ireg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, copyArg);
+        argTempNames.push_back(tempName);
     }
 
     // 2. Generate call instruction with the function name and the temp stack slots as arguments
-    vector<string> v = {reg, funcName};
-    v.insert(v.end(), varTempNames.begin(), varTempNames.end());
-
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, v);
-
-
+    vector<string> callArgs = {ireg, funcName};
+    callArgs.insert(callArgs.end(), argTempNames.begin(), argTempNames.end());
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, callArgs);
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitRelational(ifccParser::RelationalContext *ctx){
     auto op = ctx->OP->getText();
-    this->visit(ctx->expr(0));
 
-    string indexTmp = createVariableTmp();
-    vector<string> v = {indexTmp, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    Type lhsType = inferExprType(ctx->expr(0));
+    Type rhsType = inferExprType(ctx->expr(1));
+    // Les comparaisons prennent un type de calcul (soit int soit double) 
+    // et renvoient un int (0 ou 1)
+    Type cmpType = (lhsType == DoubleType || rhsType == DoubleType) ? DoubleType : IntType;
+
+    this->visit(ctx->expr(0));
+    string lhsTmp = createVariableTmp(lhsType);
+    vector<string> saveLhs = {lhsTmp, activeReg(lhsType)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, lhsType, saveLhs);
 
     this->visit(ctx->expr(1));
 
+    string lhsOp = lhsTmp;
+    string rhsOp = activeReg(rhsType);
+
+    if (cmpType == DoubleType) {
+        // Si on fait la conversion de lhs juste après, on va écraser la valeur de freg
+        if (rhsType == DoubleType && lhsType == IntType) {
+            string rhsTmp = createVariableTmp(DoubleType);
+            vector<string> saveRhs = {rhsTmp, freg};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, DoubleType, saveRhs);
+            rhsOp = rhsTmp;
+        }
+        
+        if (lhsType == IntType) {
+            string lhsDouble = createVariableTmp(DoubleType);
+            emitConvert(IntType, DoubleType, lhsTmp, lhsDouble);
+            lhsOp = lhsDouble;
+        }
+        if (rhsType == IntType) {
+            string rhsDouble = createVariableTmp(DoubleType);
+            emitConvert(IntType, DoubleType, ireg, rhsDouble);
+            rhsOp = rhsDouble;
+        }
+    }
+
+    vector<string> cmpArgs = {ireg, lhsOp, rhsOp};
     if (op == "<") {
-        vector<string> v2 = {string(reg), indexTmp, string(reg)};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_lt, IntType, v2);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_lt, cmpType, cmpArgs);
     } else if (op == "<=") {
-        vector<string> v3 = {string(reg), indexTmp, string(reg)};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_le, IntType, v3);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_le, cmpType, cmpArgs);
     } else if (op == ">") {
-        vector<string> v4 = {string(reg), indexTmp, string(reg)};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_gt, IntType, v4);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_gt, cmpType, cmpArgs);
     } else if (op == ">=") {
-        vector<string> v5 = {string(reg), indexTmp, string(reg)};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ge, IntType, v5);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ge, cmpType, cmpArgs);
     }
 
     return 0;
-
 }
 
 antlrcpp::Any IRGenVisitor::visitEquality(ifccParser::EqualityContext *ctx){
     auto op = ctx->OP->getText();
-    this->visit(ctx->expr(0));
 
-    string indexTmp = createVariableTmp();
-    vector<string> v = {indexTmp, reg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, v);
+    Type lhsType = inferExprType(ctx->expr(0));
+    Type rhsType = inferExprType(ctx->expr(1));
+    // Les comparaisons prennent un type de calcul (int/double) et retournent booleen
+    Type cmpType = (lhsType == DoubleType || rhsType == DoubleType) ? DoubleType : IntType;
+
+    this->visit(ctx->expr(0));
+    string lhsTmp = createVariableTmp(lhsType);
+    vector<string> saveLhs = {lhsTmp, activeReg(lhsType)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, lhsType, saveLhs);
 
     this->visit(ctx->expr(1));
 
+    string lhsOp = lhsTmp;
+    string rhsOp = activeReg(rhsType);
+
+    if (cmpType == DoubleType) {
+        // Si on fait la conversion de lhs juste après, on va écraser la valeur de freg
+        if (rhsType == DoubleType && lhsType == IntType) {
+            string rhsTmp = createVariableTmp(DoubleType);
+            vector<string> saveRhs = {rhsTmp, freg};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, DoubleType, saveRhs);
+            rhsOp = rhsTmp;
+        }
+        if (lhsType == IntType) {
+            string lhsDouble = createVariableTmp(DoubleType);
+            emitConvert(IntType, DoubleType, lhsTmp, lhsDouble);
+            lhsOp = lhsDouble;
+        }
+        if (rhsType == IntType) {
+            string rhsDouble = createVariableTmp(DoubleType);
+            emitConvert(IntType, DoubleType, ireg, rhsDouble);
+            rhsOp = rhsDouble;
+        }
+    }
+
+    vector<string> cmpArgs = {ireg, lhsOp, rhsOp};
     if (op == "==") {
-        vector<string> v2 = {string(reg), indexTmp, string(reg)};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_eq, IntType, v2);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_eq, cmpType, cmpArgs);
     } else if (op == "!=") {
-        vector<string> v3 = {string(reg), indexTmp, string(reg)};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ne, IntType, v3);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ne, cmpType, cmpArgs);
     }
 
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx) {
+    Type exprType = inferExprType(ctx->expr());
     this->visit(ctx->expr());
-    vector<string> v = {reg, reg};
+
+    if (exprType == DoubleType) {
+        // On convertit d'abord en entier via (x != 0.0), puis on peut faire le lnot
+        string zeroTmp = createVariableTmp(DoubleType);
+        vector<string> z = {zeroTmp, "0.0"};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, DoubleType, z);
+
+        vector<string> cmp = {ireg, freg, zeroTmp};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ne, DoubleType, cmp);
+    }
+
+    vector<string> v = {ireg, ireg};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::lnot, IntType, v);
 
     return 0;

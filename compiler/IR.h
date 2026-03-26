@@ -33,6 +33,8 @@ class IRInstr {
 		lnot,
 		rmem,
 		wmem,
+		itod,
+		dtoi,
 		call,
 		bxor,
 		bor,
@@ -118,7 +120,7 @@ class BasicBlock {
 
 class CFG {
  public:
-	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(-4), nextBBnumber(0) {
+	CFG(IR* ast) : ast(ast), nextFreeSymbolIndex(1), nextBBnumber(0) {
 		this->current_bb = nullptr;
 	};
 
@@ -130,7 +132,7 @@ class CFG {
 		void gen_x86(ostream& o);
 		string toString() const;
 		string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns e.g. "-24(%rbp)" for the proper value of 24 */
-		void gen_x86_prologue(ostream& o);
+		void gen_x86_prologue(ostream& o, const string& functionName);
 		void gen_x86_epilogue(ostream& o);
 		int get_var_index(string name);
 		int get_var_index_x86(string name);

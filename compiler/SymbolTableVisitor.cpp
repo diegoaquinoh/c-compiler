@@ -13,31 +13,20 @@ void SymbolTableVisitor::exitScope() {
     varStack.resize(marker);
 }
 
-int SymbolTableVisitor::declareVar(const std::string &name) {
+void SymbolTableVisitor::declareVar(const std::string &name, Type t) {
     // Check for redeclaration within current scope only
     int scopeStart = scopeMarkers.back();
     for (int i = scopeStart; i < (int)varStack.size(); i++) {
         if (varStack[i].first == name) {
             cerr << "error: variable '" << name << "' declared multiple times in same scope\n";
             errorFlag = true;
-            return varStack[i].second;
+            return;
         }
     }
-    nextIndex -= 4;
-    varStack.push_back({name, nextIndex});
-    // Also add to the flat symbol table for IRGenVisitor
-    allSymbolTables[currentFunction][name] = nextIndex;
-    return nextIndex;
-}
 
-int SymbolTableVisitor::lookupVar(const std::string &name) {
-    // Search from back to front (innermost scope first)
-    for (int i = (int)varStack.size() - 1; i >= 0; i--) {
-        if (varStack[i].first == name) {
-            return varStack[i].second;
-        }
-    }
-    return 0; // not found
+    varStack.push_back({name, t});
+    // Also add to the flat symbol table for IRGenVisitor
+    allSymbolTables[currentFunction][name] = t;
 }
 
 void SymbolTableVisitor::useVar(const std::string &name) {
@@ -57,6 +46,144 @@ void SymbolTableVisitor::useVar(const std::string &name) {
     }
 }
 
+Type SymbolTableVisitor::getVarType(const std::string &name) const {
+    for (int i = (int)varStack.size() - 1; i >= 0; i--) {
+        if (varStack[i].first == name) {
+            return varStack[i].second;
+        }
+    }
+    return IntType;
+}
+
+Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
+    if (ctx == nullptr) {
+        return IntType;
+    }
+
+    if (auto *c = dynamic_cast<ifccParser::ConstContext *>(ctx)) {
+        if (c->DOUBLE_CONST()) {
+            return DoubleType;
+        }
+        return IntType;
+    }
+
+    if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
+        string name = v->VAR()->getText();
+        useVar(name);
+        return getVarType(name);
+    }
+
+    if (auto *p = dynamic_cast<ifccParser::ParensContext *>(ctx)) {
+        return inferExprType(p->expr());
+    }
+
+    if (auto *n = dynamic_cast<ifccParser::NegativeContext *>(ctx)) {
+        return inferExprType(n->expr());
+    }
+
+    if (auto *n = dynamic_cast<ifccParser::LogicalnotContext *>(ctx)) {
+        inferExprType(n->expr());
+        return IntType;
+    }
+
+    if (auto *m = dynamic_cast<ifccParser::MultdivContext *>(ctx)) {
+        // Regle arithmetique : int op double => double, sauf modulo
+        Type lhs = inferExprType(m->expr(0));
+        Type rhs = inferExprType(m->expr(1));
+        string op = m->OP->getText();
+        if (op == "%" && (lhs == DoubleType || rhs == DoubleType)) {
+            cerr << "error: operator '%' only supports int operands\n";
+            errorFlag = true;
+        }
+        return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
+    }
+
+    if (auto *a = dynamic_cast<ifccParser::AddsubContext *>(ctx)) {
+        // Meme regle de pour + et -
+        Type lhs = inferExprType(a->expr(0));
+        Type rhs = inferExprType(a->expr(1));
+        return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
+    }
+
+    if (auto *r = dynamic_cast<ifccParser::RelationalContext *>(ctx)) {
+        // Les comparaisons produisent toujours un entier (bool 0 ou 1)
+        inferExprType(r->expr(0));
+        inferExprType(r->expr(1));
+        return IntType;
+    }
+
+    if (auto *e = dynamic_cast<ifccParser::EqualityContext *>(ctx)) {
+        // Les comparaisons produisent toujours un booleen entier (0 ou 1)
+        inferExprType(e->expr(0));
+        inferExprType(e->expr(1));
+        return IntType;
+    }
+
+    if (auto *b = dynamic_cast<ifccParser::BitwiseandContext *>(ctx)) {
+        // Les operateurs bitwise sont reserves aux operandes entiers
+        Type lhs = inferExprType(b->expr(0));
+        Type rhs = inferExprType(b->expr(1));
+        if (lhs != IntType || rhs != IntType) {
+            cerr << "error: bitwise '&' only supports int operands\n";
+            errorFlag = true;
+        }
+        return IntType;
+    }
+
+    if (auto *b = dynamic_cast<ifccParser::BitwisexorContext *>(ctx)) {
+        // Les operateurs bitwise sont reserves aux operandes entiers
+        Type lhs = inferExprType(b->expr(0));
+        Type rhs = inferExprType(b->expr(1));
+        if (lhs != IntType || rhs != IntType) {
+            cerr << "error: bitwise '^' only supports int operands\n";
+            errorFlag = true;
+        }
+        return IntType;
+    }
+
+    if (auto *b = dynamic_cast<ifccParser::BitwiseorContext *>(ctx)) {
+        // Les operateurs bitwise sont reserves aux operandes entiers
+        Type lhs = inferExprType(b->expr(0));
+        Type rhs = inferExprType(b->expr(1));
+        if (lhs != IntType || rhs != IntType) {
+            cerr << "error: bitwise '|' only supports int operands\n";
+            errorFlag = true;
+        }
+        return IntType;
+    }
+
+    if (auto *a = dynamic_cast<ifccParser::AffectStmtContext *>(ctx)) {
+        string name = a->VAR()->getText();
+        useVar(name);
+        if (a->expr()) {
+            inferExprType(a->expr());
+        }
+        return getVarType(name);
+    }
+
+    if (auto *f = dynamic_cast<ifccParser::FuncCallContext *>(ctx)) {
+        string funcName = f->VAR()->getText();
+        if (!knownFunctions.count(funcName)) {
+            cerr << "error: function '" << funcName << "' called but not declared\n";
+            errorFlag = true;
+        }
+        int argCount = static_cast<int>(f->expr().size());
+        if (argCount > 6) {
+            cerr << "error: function '" << funcName << "' called with too many arguments (" << argCount << ")\n";
+            errorFlag = true;
+        } else if (knownFunctions.count(funcName) && argCount != functionArgCount[funcName]) {
+            cerr << "error: '" << funcName << "' expects " << functionArgCount[funcName]
+                 << " arguments, got " << argCount << "\n";
+            errorFlag = true;
+        }
+        for (auto *arg : f->expr()) {
+            inferExprType(arg);
+        }
+        return IntType;
+    }
+
+    return IntType;
+}
 // --- Visitors ---
 
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
@@ -87,13 +214,15 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
     int paramCount = 0;
     if (ctx->param_list()) {
         auto params = ctx->param_list()->VAR();
+        auto types = ctx->param_list()->TYPE();
         paramCount = params.size();
         functionArgCount[funcName] = paramCount;
 
         // Enter function scope and declare parameters
         enterScope();
-        for (auto *param : params) {
-            declareVar(param->getText());
+        for (size_t i = 0; i < params.size(); i++) {
+            Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
+            declareVar(params[i]->getText(), paramType);
         }
     } else {
         functionArgCount[funcName] = 0;
@@ -125,6 +254,8 @@ antlrcpp::Any SymbolTableVisitor::visitBlock(ifccParser::BlockContext *ctx) {
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
+    // On memorise le type de declaration pour tous les decl_item de l'instruction
+    currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
     }
@@ -132,14 +263,21 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *c
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx) {
-    declareVar(ctx->VAR()->getText());
+    string varName = ctx->VAR()->getText();
+    declareVar(varName, currentDeclType);
     if (ctx->expr()) {
-        this->visit(ctx->expr());
+        inferExprType(ctx->expr());
     }
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx) {
+    // Semantique volontairement simple et proche de C : l'expression du switch doit etre int.
+    Type t = inferExprType(ctx->expr());
+    if (t != IntType) {
+        cerr << "error: switch expression must be of type int\n";
+        errorFlag = true;
+    }
     this->visit(ctx->expr());
     enterScope();
     for (auto *clause : ctx->switch_clause()) {
@@ -180,15 +318,16 @@ antlrcpp::Any SymbolTableVisitor::visitBreak_stmt(ifccParser::Break_stmtContext 
 }
 
 antlrcpp::Any SymbolTableVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx) {
-    useVar(ctx->VAR()->getText());
+    string varName = ctx->VAR()->getText();
+    useVar(varName);
     if (ctx->expr()) {
-        this->visit(ctx->expr());
+        inferExprType(ctx->expr());
     }
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx) {
-    this->visit(ctx->expr());
+    inferExprType(ctx->expr());
     this->visit(ctx->block());
     if (ctx->else_stmt()) {
         this->visit(ctx->else_stmt());
@@ -204,41 +343,27 @@ antlrcpp::Any SymbolTableVisitor::visitElse_stmt(ifccParser::Else_stmtContext *c
 
 antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
     if (ctx->expr()) {
-        this->visit(ctx->expr());
+        inferExprType(ctx->expr());
     }
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
-    string funcName = ctx->VAR()->getText();
-    if (!knownFunctions.count(funcName)) {
-        cerr << "error: function '" << funcName << "' called but not declared\n";
-        errorFlag = true;
-    }
-    int argCount = ctx->expr().size();
-    if (argCount > 6) {
-        cerr << "error: function '" << funcName << "' called with too many arguments (" << argCount << ")\n";
-        errorFlag = true;
-    } else if (functionArgCount.count(funcName) && argCount != functionArgCount[funcName]) {
-        cerr << "error: '" << funcName << "' expects " << functionArgCount[funcName]
-             << " arguments, got " << argCount << "\n";
-        errorFlag = true;
-    }
-    for (auto *arg : ctx->expr()) {
-        this->visit(arg);
-    }
+    inferExprType(ctx);
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitMultdiv(ifccParser::MultdivContext *ctx) {
-    this->visit(ctx->expr(0));
-    this->visit(ctx->expr(1));
+antlrcpp::Any SymbolTableVisitor::visitMultdiv(ifccParser::MultdivContext *ctx)
+{
+    inferExprType(ctx);
+
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitAddsub(ifccParser::AddsubContext *ctx) {
-    this->visit(ctx->expr(0));
-    this->visit(ctx->expr(1));
+antlrcpp::Any SymbolTableVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
+{  
+    inferExprType(ctx);
+
     return 0;
 }
 
@@ -251,65 +376,67 @@ antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx
         return 0;
     }
 
-    this->visit(operand);
+    inferExprType(operand);
 
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx){
-    this->visit(ctx->expr());
+    inferExprType(ctx);
+
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitParens(ifccParser::ParensContext *ctx) {
-    this->visit(ctx->expr());
+antlrcpp::Any SymbolTableVisitor::visitParens(ifccParser::ParensContext *ctx){
+    inferExprType(ctx);
+
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitConst(ifccParser::ConstContext *ctx) {
-    (void)ctx;
+    inferExprType(ctx);
 
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitVar(ifccParser::VarContext *ctx) {
-    useVar(ctx->VAR()->getText());
+    inferExprType(ctx);
+
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx) {
-    this->visit(ctx->expr(0));
-    this->visit(ctx->expr(1));
+antlrcpp::Any SymbolTableVisitor::visitBitwiseand(ifccParser::BitwiseandContext *ctx){
+    inferExprType(ctx);
+
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx) {
-    this->visit(ctx->expr(0));
-    this->visit(ctx->expr(1));
+antlrcpp::Any SymbolTableVisitor::visitBitwisexor(ifccParser::BitwisexorContext *ctx){
+    inferExprType(ctx);
+
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx) {
-    this->visit(ctx->expr(0));
-    this->visit(ctx->expr(1));
+antlrcpp::Any SymbolTableVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
+    inferExprType(ctx);
+
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitRelational(ifccParser::RelationalContext *ctx){
-    this->visit(ctx->expr(0));
-    this->visit(ctx->expr(1));
+    inferExprType(ctx);
 
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitEquality(ifccParser::EqualityContext *ctx){
-    this->visit(ctx->expr(0));
-    this->visit(ctx->expr(1));
+    inferExprType(ctx);
 
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx) {
+    inferExprType(ctx->expr());
     this->visit(ctx->expr());
     enterScope();
     for (auto stmt : ctx->stmt()) {

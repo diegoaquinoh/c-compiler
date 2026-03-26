@@ -48,14 +48,16 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | expr '^' expr                         # bitwisexor
      | expr '|' expr                         # bitwiseor
      | VAR '=' expr                          # affectStmt
+     | DOUBLE_CONST                          # const
      | CONST                                 # const
      | CHAR_CONST                            # const
      | VAR                                   # var
      ;
 
 RETURN : 'return' ;
-TYPE : 'int' | 'void' ;
+TYPE : 'int' | 'void' | 'double' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
+DOUBLE_CONST : [0-9]+ '.' [0-9]+ ;
 CONST : [0-9]+ ;
 CHAR_CONST : '\'' ( '\\' . | ~['\\] ) '\'' ;
 COMMENT : '/*' .*? '*/' -> skip ;

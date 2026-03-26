@@ -14,7 +14,7 @@ class IRGenVisitor : public ifccBaseVisitor {
             using ifccBaseVisitor::visit;
 	        IRGenVisitor() {}
 
-        virtual string createVariableTmp();
+        virtual string createVariableTmp(Type t = IntType);
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
         virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
@@ -65,9 +65,14 @@ class IRGenVisitor : public ifccBaseVisitor {
         IR& getIR() { return this->ir; }
 
         private:
+                Type inferExprType(ifccParser::ExprContext *ctx);
+                string activeReg(Type t) const;
+                void emitConvert(Type src, Type dst, const string &srcName, const string &dstName);
+                void ensureValueInReg(Type currentType, Type targetType);
                 int cptTempVariables = 0;
                 int scopeCounter = 0;
                 bool breakTriggered = false;
+                Type currentDeclType = IntType;
                 IR ir;
                 // Scope stack: each entry maps source name -> scoped IR name
                 vector<map<string, string>> scopeStack;

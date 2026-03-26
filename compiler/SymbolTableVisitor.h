@@ -11,6 +11,7 @@ using namespace std;
 
 class SymbolTableVisitor: public ifccBaseVisitor {
     public:
+
         using ifccBaseVisitor::visit;
 
         // Scope management
@@ -18,9 +19,9 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         void exitScope();
 
         // Variable management
-        int declareVar(const std::string &name);
-        int lookupVar(const std::string &name);
+        void declareVar(const std::string &name, Type t);
         void useVar(const std::string &name);
+        Type getVarType(const string &name) const;
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;
         virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
@@ -62,19 +63,22 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         virtual antlrcpp::Any visitBitwisexor(ifccParser::BitwisexorContext *ctx) override;
         virtual antlrcpp::Any visitBitwiseor(ifccParser::BitwiseorContext *ctx) override;
 
-        map<string, map<string, int>> getAllSymbolTables() const { return allSymbolTables; }
+        map<string, map<string, Type>> getAllSymbolTables() const { return allSymbolTables; }
         map<string, int> getFunctionArgCount() const { return functionArgCount; }
         virtual antlrcpp::Any visitWhile_stmt(ifccParser::While_stmtContext *ctx) override;
+
         bool hasError() const { return errorFlag; }
 
     private:
+        Type inferExprType(ifccParser::ExprContext *ctx);
+        Type currentDeclType = IntType;
         // Per-function scope stack
-        vector<pair<string, int>> varStack;    // (varName, stackOffset)
+        vector<pair<string, Type>> varStack;    // (varName, stackOffset)
         vector<int> scopeMarkers;              // marks where each scope begins in varStack
 
         // Global function registry
         string currentFunction;
-        map<string, map<string, int>> allSymbolTables;  // funcName -> (varName -> offset), built at end of each function
+        map<string, map<string, Type>> allSymbolTables;  // funcName -> (varName -> Type), built at end of each function
         set<string> usedVars;
         int nextIndex = 0;
         bool errorFlag = false;
