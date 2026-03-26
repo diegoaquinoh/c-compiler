@@ -6,15 +6,26 @@
 #include <map>
 #include <set>
 #include <string>
+#include <vector>
 using namespace std;
 
 class SymbolTableVisitor: public ifccBaseVisitor {
     public:
-        void declareVar(const string &name, Type t);
-        void useVar(const string &name);
+
+        using ifccBaseVisitor::visit;
+
+        // Scope management
+        void enterScope();
+        void exitScope();
+
+        // Variable management
+        void declareVar(const std::string &name, Type t);
+        void useVar(const std::string &name);
         Type getVarType(const string &name) const;
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;
+        virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
+        virtual antlrcpp::Any visitBlock(ifccParser::BlockContext *ctx) override;
 
         virtual antlrcpp::Any visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) override ;
         virtual antlrcpp::Any visitDecl_item(ifccParser::Decl_itemContext *ctx) override ;
@@ -52,6 +63,8 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         virtual antlrcpp::Any visitBitwisexor(ifccParser::BitwisexorContext *ctx) override;
         virtual antlrcpp::Any visitBitwiseor(ifccParser::BitwiseorContext *ctx) override;
 
+        map<string, map<string, Type>> getAllSymbolTables() const { return allSymbolTables; }
+        map<string, int> getFunctionArgCount() const { return functionArgCount; }
         virtual antlrcpp::Any visitWhile_stmt(ifccParser::While_stmtContext *ctx) override;
 
         bool hasError() const { return errorFlag; }
@@ -59,8 +72,15 @@ class SymbolTableVisitor: public ifccBaseVisitor {
     private:
         Type inferExprType(ifccParser::ExprContext *ctx);
         Type currentDeclType = IntType;
-        map<string,Type> symbolType;
+        // Per-function scope stack
+        vector<pair<string, Type>> varStack;    // (varName, stackOffset)
+        vector<int> scopeMarkers;              // marks where each scope begins in varStack
+
+        // Global function registry
+        string currentFunction;
+        map<string, map<string, Type>> allSymbolTables;  // funcName -> (varName -> Type), built at end of each function
         set<string> usedVars;
+        int nextIndex = 0;
         bool errorFlag = false;
         set<string> knownFunctions = {"putchar", "getchar"};
         map<string, int> functionArgCount = {{"putchar", 1}, {"getchar", 0}};

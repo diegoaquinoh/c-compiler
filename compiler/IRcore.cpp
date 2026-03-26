@@ -4,21 +4,7 @@
 // IR //
 
 IR::IR() {
-    this->currentCfg = new CFG(this);
-
-    BasicBlock* prologueBB = new BasicBlock(this->currentCfg, "prologue");
-    BasicBlock* body = new BasicBlock(this->currentCfg, "body");
-    BasicBlock* epilogue = new BasicBlock(this->currentCfg, "epilogue");
-
-    prologueBB->exit_true = body;
-    body->exit_true = epilogue;
-
-    this->currentCfg->add_bb(prologueBB);
-    this->currentCfg->add_bb(body);
-    this->currentCfg->add_bb(epilogue);
-    this->currentCfg->current_bb = body;
-
-    cfgsMap["main"] = this->currentCfg;
+    this->currentCfg = nullptr;
 }
 
 // IR::~IR() {
@@ -61,6 +47,10 @@ string CFG::create_new_tempvar(Type t){
 
     this->add_to_symbol_table(tempName, t);
     return tempName;
+}
+
+int CFG::get_var_index(string name){
+    return this->SymbolIndex.at(name);
 }
 
 Type CFG::get_var_type(string name){

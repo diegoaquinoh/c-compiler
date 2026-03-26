@@ -28,7 +28,8 @@ Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     }
 
     if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
-        return this->ir.currentCfg->get_var_type(v->VAR()->getText());
+        string irName = scopedName(v->VAR()->getText());
+        return this->ir.currentCfg->get_var_type(irName);
     }
 
     if (auto *p = dynamic_cast<ifccParser::ParensContext *>(ctx)) {
@@ -103,33 +104,137 @@ string IRGenVisitor::createVariableTmp(Type t) {
     return nameVar;
 }
 
+// --- Scope management for variable renaming ---
+
+void IRGenVisitor::enterScope() {
+    scopeStack.push_back({});
+}
+
+void IRGenVisitor::exitScope() {
+    scopeStack.pop_back();
+}
+
+string IRGenVisitor::declareScoped(const string &name) {
+    // Check if name already exists in any outer scope
+    for (int i = (int)scopeStack.size() - 1; i >= 0; i--) {
+        if (scopeStack[i].count(name)) {
+            // Shadowing: create a unique name
+            string uniqueName = name + "@" + to_string(scopeCounter++);
+            scopeStack.back()[name] = uniqueName;
+            return uniqueName;
+        }
+    }
+    // First declaration: use original name
+    scopeStack.back()[name] = name;
+    return name;
+}
+
+string IRGenVisitor::scopedName(const string &name) {
+    // Search from innermost scope outward
+    for (int i = (int)scopeStack.size() - 1; i >= 0; i--) {
+        if (scopeStack[i].count(name)) {
+            return scopeStack[i][name];
+        }
+    }
+    return name; // fallback (shouldn't happen if semantic analysis passed)
+}
+
+// --- Visitors ---
+
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
-    auto statements = ctx->stmt();
-    for (auto *stmt : statements) {
+    for (auto *func : ctx->func_def()) {
+        this->visit(func);
+    }
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
+{
+    string funcName = ctx->VAR()->getText();
+
+    // Create a new CFG for this function
+    CFG* cfg = new CFG(&this->ir);
+    cfg->functionName = funcName;
+
+    // Reset scope state
+    scopeStack.clear();
+    scopeCounter = 0;
+    enterScope(); // function-level scope
+
+    // Register parameter names
+    if (ctx->param_list()) {
+        auto params = ctx->param_list()->VAR();
+        auto types = ctx->param_list()->TYPE();
+        for (size_t i = 0; i < params.size(); i++) {
+            string paramName = params[i]->getText();
+            string irName = declareScoped(paramName);
+            cfg->paramNames.push_back(irName);
+            Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
+            cfg->add_to_symbol_table(irName, paramType);
+        }
+    }
+
+    // Set up basic blocks: prologue -> body -> epilogue
+    BasicBlock* prologueBB = new BasicBlock(cfg, funcName + "_prologue");
+    BasicBlock* body = new BasicBlock(cfg, funcName + "_body");
+    BasicBlock* epilogue = new BasicBlock(cfg, funcName + "_epilogue");
+
+    prologueBB->exit_true = body;
+    body->exit_true = epilogue;
+
+    cfg->add_bb(prologueBB);
+    cfg->add_bb(body);
+    cfg->add_bb(epilogue);
+    cfg->current_bb = body;
+
+    // Store in IR
+    this->ir.cfgsMap[funcName] = cfg;
+    this->ir.currentCfg = cfg;
+
+    // Reset temp variable counter per function
+    cptTempVariables = 0;
+    breakTriggered = false;
+
+    // Visit the function body
+    this->visit(ctx->block());
+
+    // Implicit return 0 for main (or any int function without explicit return)
+    if (!cfg->current_bb->has_return) {
+        string retType = ctx->TYPE()->getText();
+        if (retType == "int") {
+            vector<string> loadZero = {ireg, "0"};
+            cfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, loadZero);
+
+            vector<string> retZero = {ireg};
+            cfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, retZero);
+            cfg->current_bb->has_return = true;
+        }
+        cfg->current_bb->exit_true = nullptr;
+        cfg->current_bb->exit_false = nullptr;
+    }
+
+    exitScope(); // end function scope
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitBlock(ifccParser::BlockContext *ctx)
+{
+    enterScope();
+    for (auto *stmt : ctx->stmt()) {
         this->visit(stmt);
         if (this->ir.currentCfg->current_bb->has_return) {
             break;
         }
     }
 
-    if (!this->ir.currentCfg->current_bb->has_return) {
-        vector<string> loadZero = {ireg, "0"};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, loadZero);
-
-        vector<string> retZero = {ireg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, retZero);
-        this->ir.currentCfg->current_bb->has_return = true;
-        this->ir.currentCfg->current_bb->exit_true = nullptr;
-        this->ir.currentCfg->current_bb->exit_false = nullptr;
-    }
-
+    exitScope();
     return 0;
 }
 
 antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
-    currentDeclType = (ctx->var_type()->getText() == "double") ? DoubleType : IntType;
+    currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
     }
@@ -139,14 +244,15 @@ antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
     string varName = ctx->VAR()->getText();
-    this->ir.currentCfg->add_to_symbol_table(varName, currentDeclType);
+    string irName = declareScoped(varName);
+    this->ir.currentCfg->add_to_symbol_table(irName, currentDeclType);
 
     if (ctx->expr()) {
         // Initialisation: evaluer l'expression, convertir si besoin, puis copier vers la variable.
         Type exprType = inferExprType(ctx->expr());
         this->visit(ctx->expr());
         ensureValueInReg(exprType, currentDeclType);
-        vector<string> v = {varName, activeReg(currentDeclType)};
+        vector<string> v = {irName, activeReg(currentDeclType)};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, currentDeclType, v);
     }
 
@@ -156,14 +262,15 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 {
     string varName = ctx->VAR()->getText();
-    Type varType = this->ir.currentCfg->get_var_type(varName);
+    string irName = scopedName(varName);
+    Type varType = this->ir.currentCfg->get_var_type(irName);
 
     // le type cible est celui de la variable de gauche
     Type exprType = inferExprType(ctx->expr());
     this->visit(ctx->expr());
     ensureValueInReg(exprType, varType);
 
-    vector<string> v = {varName, activeReg(varType)};
+    vector<string> v = {irName, activeReg(varType)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, v);
 
     return 0;
@@ -206,9 +313,10 @@ antlrcpp::Any IRGenVisitor::visitConst(ifccParser::ConstContext *ctx)
 antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 {
     string varName = ctx->VAR()->getText();
-    Type varType = this->ir.currentCfg->get_var_type(varName);
+    string irName = scopedName(varName);
+    Type varType = this->ir.currentCfg->get_var_type(irName);
 
-    vector<string> v = {activeReg(varType), varName};
+    vector<string> v = {activeReg(varType), irName};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, v);
 
     return 0;
@@ -217,7 +325,6 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 {
     CFG *cfg = this->ir.currentCfg;
-
     BasicBlock *testBB = cfg->current_bb;
     BasicBlock *trueBB = new BasicBlock(cfg, cfg->new_BB_name() + "_true");
     BasicBlock *endBB = new BasicBlock(cfg, cfg->new_BB_name() + "_endif");
@@ -248,9 +355,7 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
     // Build true branch
     cfg->add_bb(trueBB);
     cfg->current_bb = trueBB;
-    for (auto *stmt : ctx->stmt()) {
-        this->visit(stmt);
-    }
+    this->visit(ctx->block());
     if (!cfg->current_bb->has_return) {
         cfg->current_bb->exit_true = endBB;
         cfg->current_bb->exit_false = nullptr;
@@ -283,15 +388,16 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
     this->breakTriggered = false;
 
     this->visit(ctx->expr());
-
     string switchValue = createVariableTmp(IntType);
     vector<string> saveSwitchValue = {switchValue, ireg};
     entryBB->add_IRInstr(IRInstr::copy, IntType, saveSwitchValue);
 
     auto clauses = ctx->switch_clause();
+    enterScope();
     if (clauses.empty()) {
         entryBB->exit_true = afterSwitch;
         entryBB->exit_false = nullptr;
+        exitScope();
         cfg->add_bb(afterSwitch);
         cfg->current_bb = afterSwitch;
         return 0;
@@ -337,6 +443,7 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
         vector<string> compareCase = {ireg, switchValue, caseValueVar};
         testBB->add_IRInstr(IRInstr::cmp_eq, IntType, compareCase);
         testBB->test_var_name = ireg;
+        testBB->test_var_name = ireg;
         testBB->exit_true = caseBodyBB;
         testBB->exit_false = nextTestBB;
     }
@@ -366,6 +473,7 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
     }
 
     cfg->pop_break_target();
+    exitScope();
     cfg->add_bb(afterSwitch);
     cfg->current_bb = afterSwitch;
 
@@ -374,12 +482,7 @@ antlrcpp::Any IRGenVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx
 
 antlrcpp::Any IRGenVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx)
 {
-    for (auto stmt : ctx->stmt()) {
-        this->visit(stmt);
-        if (this->ir.currentCfg->current_bb && this->ir.currentCfg->current_bb->has_return) {
-            break;
-        }
-    }
+    this->visit(ctx->block());
     return 0;
 }
 
@@ -411,23 +514,33 @@ antlrcpp::Any IRGenVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx)
         cfg->current_bb->add_IRInstr(IRInstr::cmp_ne, DoubleType, cmp);
     }
     condBB->test_var_name = ireg;
-
     // Condition block exits
     condBB->exit_true = bodyBB;
     condBB->exit_false = endBB;
 
+    cfg->push_break_target(endBB);
+
     // Build body block
     cfg->add_bb(bodyBB);
     cfg->current_bb = bodyBB;
+    enterScope();
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
+        if (cfg->current_bb->has_return || breakTriggered) {
+            break;
+        }
     }
+    exitScope();
     
     // Loop back to condition
-    if (!cfg->current_bb->has_return) {
+    if (breakTriggered) {
+        breakTriggered = false;
+    } else if (!cfg->current_bb->has_return) {
         cfg->current_bb->exit_true = condBB;
         cfg->current_bb->exit_false = nullptr;
     }
+
+    cfg->pop_break_target();
 
     // Continue building in the endBB
     cfg->add_bb(endBB);
@@ -661,7 +774,6 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     vector<string> callArgs = {ireg, funcName};
     callArgs.insert(callArgs.end(), argTempNames.begin(), argTempNames.end());
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, callArgs);
-
     return 0;
 }
 

@@ -1,17 +1,44 @@
 #include "SymbolTableVisitor.h"
 using namespace std;
 
+// --- Scope management ---
+
+void SymbolTableVisitor::enterScope() {
+    scopeMarkers.push_back(varStack.size());
+}
+
+void SymbolTableVisitor::exitScope() {
+    int marker = scopeMarkers.back();
+    scopeMarkers.pop_back();
+    varStack.resize(marker);
+}
+
 void SymbolTableVisitor::declareVar(const std::string &name, Type t) {
-    if (symbolType.count(name)) {
-        cerr << "error: variable '" << name << "' declared multiple times\n";
-        errorFlag = true;
-        return;
+    // Check for redeclaration within current scope only
+    int scopeStart = scopeMarkers.back();
+    for (int i = scopeStart; i < (int)varStack.size(); i++) {
+        if (varStack[i].first == name) {
+            cerr << "error: variable '" << name << "' declared multiple times in same scope\n";
+            errorFlag = true;
+            return;
+        }
     }
-    symbolType[name] = t;
+
+    varStack.push_back({name, t});
+    // Also add to the flat symbol table for IRGenVisitor
+    allSymbolTables[currentFunction][name] = t;
 }
 
 void SymbolTableVisitor::useVar(const std::string &name) {
-    if (!symbolType.count(name)) {
+    // Search from back to front
+    bool found = false;
+    for (int i = (int)varStack.size() - 1; i >= 0; i--) {
+        if (varStack[i].first == name) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
         cerr << "error: variable '" << name << "' used before declaration\n";
         errorFlag = true;
     } else {
@@ -20,11 +47,12 @@ void SymbolTableVisitor::useVar(const std::string &name) {
 }
 
 Type SymbolTableVisitor::getVarType(const std::string &name) const {
-    auto it = symbolType.find(name);
-    if (it == symbolType.end()) {
-        return IntType;
+    for (int i = (int)varStack.size() - 1; i >= 0; i--) {
+        if (varStack[i].first == name) {
+            return varStack[i].second;
+        }
     }
-    return it->second;
+    return IntType;
 }
 
 Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
@@ -156,25 +184,78 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
 
     return IntType;
 }
+// --- Visitors ---
 
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
-    // Visit all statements and the return
-    for (auto *stmt : ctx->stmt()) {
-        this->visit(stmt);
+    for (auto *func : ctx->func_def()) {
+        this->visit(func);
+    }
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx) {
+    string funcName = ctx->VAR()->getText();
+    if (knownFunctions.count(funcName)) {
+        cerr << "error: function '" << funcName << "' already declared\n";
+        errorFlag = true;
     }
 
-    // Check that every declared variable is used at least once
-    for (auto &[name, idx] : symbolType) {
+    currentFunction = funcName;
+    allSymbolTables[currentFunction] = {};
+    varStack.clear();
+    scopeMarkers.clear();
+    usedVars.clear();
+    nextIndex = 0;
+
+    // Register this function so other functions can call it
+    knownFunctions.insert(funcName);
+
+    // Count parameters
+    int paramCount = 0;
+    if (ctx->param_list()) {
+        auto params = ctx->param_list()->VAR();
+        auto types = ctx->param_list()->TYPE();
+        paramCount = params.size();
+        functionArgCount[funcName] = paramCount;
+
+        // Enter function scope and declare parameters
+        enterScope();
+        for (size_t i = 0; i < params.size(); i++) {
+            Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
+            declareVar(params[i]->getText(), paramType);
+        }
+    } else {
+        functionArgCount[funcName] = 0;
+        enterScope();
+    }
+
+    // Visit the function body block (block will handle its own scope)
+    this->visit(ctx->block());
+
+    for (auto &[name, idx] : allSymbolTables[currentFunction]) {
+        (void)idx;
         if (!usedVars.count(name)) {
             cerr << "warning: variable '" << name << "' declared but never used\n";
         }
     }
+
+    exitScope();
+    currentFunction = "";
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitBlock(ifccParser::BlockContext *ctx) {
+    enterScope();
+    for (auto *stmt : ctx->stmt()) {
+        this->visit(stmt);
+    }
+    exitScope();
     return 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
     // On memorise le type de declaration pour tous les decl_item de l'instruction
-    currentDeclType = (ctx->var_type()->getText() == "double") ? DoubleType : IntType;
+    currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
     }
@@ -197,9 +278,12 @@ antlrcpp::Any SymbolTableVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContex
         cerr << "error: switch expression must be of type int\n";
         errorFlag = true;
     }
+    this->visit(ctx->expr());
+    enterScope();
     for (auto *clause : ctx->switch_clause()) {
         this->visit(clause);
     }
+    exitScope();
     return 0;
 }
 
@@ -244,10 +328,7 @@ antlrcpp::Any SymbolTableVisitor::visitAffectStmt(ifccParser::AffectStmtContext 
 
 antlrcpp::Any SymbolTableVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx) {
     inferExprType(ctx->expr());
-
-    for (auto *s : ctx->stmt()) {
-        this->visit(s);
-    }
+    this->visit(ctx->block());
     if (ctx->else_stmt()) {
         this->visit(ctx->else_stmt());
     }
@@ -256,9 +337,7 @@ antlrcpp::Any SymbolTableVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx) 
 }
 
 antlrcpp::Any SymbolTableVisitor::visitElse_stmt(ifccParser::Else_stmtContext *ctx) {
-    for (auto *s : ctx->stmt()) {
-        this->visit(s);
-    }
+    this->visit(ctx->block());
     return 0;
 }
 
@@ -288,7 +367,7 @@ antlrcpp::Any SymbolTableVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx){
+antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx) {
     ifccParser::ExprContext *operand = ctx->expr();
 
     if (dynamic_cast<ifccParser::NegativeContext *>(operand) != nullptr) {
@@ -358,8 +437,11 @@ antlrcpp::Any SymbolTableVisitor::visitEquality(ifccParser::EqualityContext *ctx
 
 antlrcpp::Any SymbolTableVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx) {
     inferExprType(ctx->expr());
+    this->visit(ctx->expr());
+    enterScope();
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
     }
+    exitScope();
     return 0;
 }

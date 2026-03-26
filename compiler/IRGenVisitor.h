@@ -2,7 +2,7 @@
 
 #include "antlr4-runtime.h"
 #include "generated/ifccBaseVisitor.h"
-#include "IR.h" 
+#include "IR.h"
 #include <map>
 #include <string>
 #include <vector>
@@ -10,24 +10,24 @@ using namespace std;
 
 
 class IRGenVisitor : public ifccBaseVisitor {
-	public:
-        int nextFreeSymbolIndex;
-        IRGenVisitor() {}
-
-        void add_to_symbol_table(string name, Type t);
+    public:
+            using ifccBaseVisitor::visit;
+	        IRGenVisitor() {}
 
         virtual string createVariableTmp(Type t = IntType);
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
+        virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
+        virtual antlrcpp::Any visitBlock(ifccParser::BlockContext *ctx) override;
 
         // Statement visitors
         virtual antlrcpp::Any visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) override;
         virtual antlrcpp::Any visitDecl_item(ifccParser::Decl_itemContext *ctx) override;
-        
+
         virtual antlrcpp::Any visitFuncCall(ifccParser::FuncCallContext *ctx) override;
 
         virtual antlrcpp::Any visitAffectStmt(ifccParser::AffectStmtContext *ctx) override;
-        
+
         virtual antlrcpp::Any visitIf_stmt(ifccParser::If_stmtContext *ctx) override;
         virtual antlrcpp::Any visitElse_stmt(ifccParser::Else_stmtContext *ctx) override;
         virtual antlrcpp::Any visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx) override;
@@ -56,17 +56,26 @@ class IRGenVisitor : public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
 
+        // Scope management for variable renaming
+        void enterScope();
+        void exitScope();
+        string scopedName(const string &name);       // lookup current scoped name
+        string declareScoped(const string &name);     // declare and return scoped name
+
         IR& getIR() { return this->ir; }
-        
+
         private:
                 Type inferExprType(ifccParser::ExprContext *ctx);
                 string activeReg(Type t) const;
                 void emitConvert(Type src, Type dst, const string &srcName, const string &dstName);
                 void ensureValueInReg(Type currentType, Type targetType);
                 int cptTempVariables = 0;
+                int scopeCounter = 0;
                 bool breakTriggered = false;
                 Type currentDeclType = IntType;
                 IR ir;
+                // Scope stack: each entry maps source name -> scoped IR name
+                vector<map<string, string>> scopeStack;
 
 
 };

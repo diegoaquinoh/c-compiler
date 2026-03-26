@@ -55,6 +55,12 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     }
 
     o << "    movl $0, -8(%rbp)\n";
+
+    const char* argRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    for (size_t i = 0; i < this->paramNames.size() && i < 6; i++) {
+        int idx = this->get_var_index_x86(this->paramNames[i]);
+        o << "    movl " << argRegs[i] << ", " << idx << "(%rbp)\n";
+    }
 }
 
 void CFG::gen_x86_epilogue(ostream &o){
