@@ -10,8 +10,9 @@ using namespace std;
 
 class SymbolTableVisitor: public ifccBaseVisitor {
     public:
-        int declareVar(const string &name);
+        void declareVar(const string &name, Type t);
         void useVar(const string &name);
+        Type getVarType(const string &name) const;
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;
 
@@ -53,14 +54,13 @@ class SymbolTableVisitor: public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitWhile_stmt(ifccParser::While_stmtContext *ctx) override;
 
-        map<string, int> getSymbolTable() const { return symbolTable; }
         bool hasError() const { return errorFlag; }
 
     private:
-        map<string, int> symbolTable;
+        Type inferExprType(ifccParser::ExprContext *ctx);
+        Type currentDeclType = IntType;
         map<string,Type> symbolType;
         set<string> usedVars;
-        int nextIndex = -4;
         bool errorFlag = false;
         set<string> knownFunctions = {"putchar", "getchar"};
         map<string, int> functionArgCount = {{"putchar", 1}, {"getchar", 0}};

@@ -1,8 +1,6 @@
 int main() {
-    int a = 1;
-    if(a) {
-        return 16;
-        return 17;
-    }
-    return 18;
+    int a = 8;
+    double b = 2.5;
+    double c = a - b;
+    return c;
 }

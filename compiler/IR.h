@@ -33,6 +33,8 @@ class IRInstr {
 		lnot,
 		rmem,
 		wmem,
+		itod,
+		dtoi,
 		call,
 		bxor,
 		bor,

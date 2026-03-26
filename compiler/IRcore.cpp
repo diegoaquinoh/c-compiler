@@ -44,7 +44,7 @@ void CFG::add_to_symbol_table(string name, Type t){
 
     this->SymbolType[name] = t;
     this->SymbolIndex[name] = this->nextFreeSymbolIndex;
-    this->nextFreeSymbolIndex += 1;
+    this->nextFreeSymbolIndex += (t == DoubleType) ? 2 : 1;
 }
 
 
@@ -127,6 +127,8 @@ static const char* opToString(IRInstr::Operation op) {
         case IRInstr::lnot:   return "lnot";
         case IRInstr::rmem:   return "rmem";
         case IRInstr::wmem:   return "wmem";
+        case IRInstr::itod:   return "itod";
+        case IRInstr::dtoi:   return "dtoi";
         case IRInstr::call:   return "call";
         case IRInstr::bxor:   return "bxor";
         case IRInstr::bor:    return "bor";

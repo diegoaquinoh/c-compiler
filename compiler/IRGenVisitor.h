@@ -16,7 +16,7 @@ class IRGenVisitor : public ifccBaseVisitor {
 
         void add_to_symbol_table(string name, Type t);
 
-        virtual string createVariableTmp();
+        virtual string createVariableTmp(Type t = IntType);
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
 
@@ -59,8 +59,13 @@ class IRGenVisitor : public ifccBaseVisitor {
         IR& getIR() { return this->ir; }
         
         private:
+                Type inferExprType(ifccParser::ExprContext *ctx);
+                string activeReg(Type t) const;
+                void emitConvert(Type src, Type dst, const string &srcName, const string &dstName);
+                void ensureValueInReg(Type currentType, Type targetType);
                 int cptTempVariables = 0;
                 bool breakTriggered = false;
+                Type currentDeclType = IntType;
                 IR ir;
 
 

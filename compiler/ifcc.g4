@@ -13,7 +13,8 @@ stmt : decl_stmt
      | return_stmt
      ;
 
-decl_stmt : 'int' decl_item (',' decl_item)* ';' ;
+decl_stmt : var_type decl_item (',' decl_item)* ';' ;
+var_type : 'int' | 'double' ;
 decl_item : VAR ('=' expr)? ;
 
 if_stmt: 'if' '(' expr ')' '{' stmt* '}' (else_stmt)? ;
@@ -42,6 +43,7 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | expr '^' expr                         # bitwisexor
      | expr '|' expr                         # bitwiseor
      | VAR '=' expr                          # affectStmt
+     | DOUBLE_CONST                          # const
      | CONST                                 # const
      | CHAR_CONST                            # const
      | VAR                                   # var
@@ -49,6 +51,7 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
 
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z_0-9]* ;
+DOUBLE_CONST : [0-9]+ '.' [0-9]+ ;
 CONST : [0-9]+ ;
 CHAR_CONST : '\'' ( '\\' . | ~['\\] ) '\'' ;
 COMMENT : '/*' .*? '*/' -> skip ;
