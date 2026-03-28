@@ -43,10 +43,17 @@ void CFG::gen_arm_prologue(ostream &o){
     o << "    sub sp, sp, #" << stackSize << "\n";
 
     // Copy parameters from registers to stack slots
-    const char* argRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+    const char* intArgRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+    const char* dblArgRegs[] = {"d0", "d1", "d2", "d3", "d4", "d5"};
+    int intIdx = 0, dblIdx = 0;
     for (size_t i = 0; i < paramNames.size() && i < 6; i++) {
         int idx = get_var_index_arm(paramNames[i]);
-        o << "    str " << argRegs[i] << ", [sp, #" << idx << "]\n";
+        Type paramType = get_var_type(paramNames[i]);
+        if (paramType == DoubleType) {
+            o << "    str " << dblArgRegs[dblIdx++] << ", [sp, #" << idx << "]\n";
+        } else {
+            o << "    str " << intArgRegs[intIdx++] << ", [sp, #" << idx << "]\n";
+        }
     }
 }
 
@@ -257,11 +264,18 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             string dest = this->params.at(0);
             string funcCallName = this->params.at(1);
 
-            const char* callArgRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+            const char* intCallArgRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+            const char* dblCallArgRegs[] = {"d0", "d1", "d2", "d3", "d4", "d5"};
+            int intIdx = 0, dblIdx = 0;
 
             for (size_t i = 2; i < this->params.size(); i++) {
+                Type argT = this->bb->cfg->get_var_type(this->params.at(i));
                 int argIndex = this->bb->cfg->get_var_index_arm(this->params.at(i));
-                o << "    ldr " << callArgRegs[i - 2] << ", [sp, #" << argIndex << "]\n";
+                if (argT == DoubleType) {
+                    o << "    ldr " << dblCallArgRegs[dblIdx++] << ", [sp, #" << argIndex << "]\n";
+                } else {
+                    o << "    ldr " << intCallArgRegs[intIdx++] << ", [sp, #" << argIndex << "]\n";
+                }
             }
 
             #ifdef __APPLE__
