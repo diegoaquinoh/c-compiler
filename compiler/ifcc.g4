@@ -34,7 +34,7 @@ case_value : '-'? CONST ;
 
 break_stmt : 'break' ';' ;
 
-return_stmt : RETURN expr ';' ;
+return_stmt : RETURN expr? ';' ;
 
 expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | '(' expr ')'                          # parens
