@@ -75,6 +75,7 @@ class IRGenVisitor : public ifccBaseVisitor {
                 Type currentDeclType = IntType;
                 Type currentFunctionReturnType = IntType;
                 map<string, Type> functionReturnType = {{"putchar", IntType}, {"getchar", IntType}};
+                map<string, vector<Type>> functionParamTypes = {{"putchar", {IntType}}, {"getchar", {}}};
                 IR ir;
                 // Scope stack: each entry maps source name -> scoped IR name
                 vector<map<string, string>> scopeStack;

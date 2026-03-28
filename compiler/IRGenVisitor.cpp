@@ -172,17 +172,22 @@ antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
     scopeCounter = 0;
     enterScope(); // function-level scope
 
-    // Register parameter names
+    // Register parameter names and types
     if (ctx->param_list()) {
         auto params = ctx->param_list()->VAR();
         auto types = ctx->param_list()->TYPE();
+        vector<Type> paramTypes;
         for (size_t i = 0; i < params.size(); i++) {
             string paramName = params[i]->getText();
             string irName = declareScoped(paramName);
             cfg->paramNames.push_back(irName);
             Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
+            paramTypes.push_back(paramType);
             cfg->add_to_symbol_table(irName, paramType);
         }
+        functionParamTypes[funcName] = paramTypes;
+    } else {
+        functionParamTypes[funcName] = {};
     }
 
     // Set up basic blocks: prologue -> body -> epilogue
@@ -769,18 +774,24 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     string funcName = ctx->VAR()->getText();
     auto args = ctx->expr();
 
-    // 1. Evaluate each arg and save to temp stack slots
+    // 1. Evaluate each arg and convert to the expected parameter type
     vector<string> argTempNames;
-    for (auto *arg : args) {
-        Type argType = inferExprType(arg);
-        this->visit(arg);
+    for (size_t i = 0; i < args.size(); i++) {
+        Type argType = inferExprType(args[i]);
+        this->visit(args[i]);
 
-        // Pour l'instant avec notre ABI, on ne peut avoir que des paramètres en int
-        ensureValueInReg(argType, IntType);
+        // Determine target type from function signature
+        Type targetType = IntType;
+        if (functionParamTypes.count(funcName) && i < functionParamTypes[funcName].size()) {
+            targetType = functionParamTypes[funcName][i];
+        }
 
-        string tempName = createVariableTmp(IntType);
-        vector<string> copyArg = {tempName, ireg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, copyArg);
+        ensureValueInReg(argType, targetType);
+
+        string tempName = createVariableTmp(targetType);
+        string reg = activeReg(targetType);
+        vector<string> copyArg = {tempName, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, targetType, copyArg);
         argTempNames.push_back(tempName);
     }
 
