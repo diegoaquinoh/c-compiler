@@ -23,7 +23,10 @@ Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         return c->DOUBLE_CONST() ? DoubleType : IntType;
     }
 
-    if (dynamic_cast<ifccParser::FuncCallContext *>(ctx)) {
+    if (auto *f = dynamic_cast<ifccParser::FuncCallContext *>(ctx)) {
+        string funcName = f->VAR()->getText();
+        if (functionReturnType.count(funcName))
+            return functionReturnType[funcName];
         return IntType;
     }
 
@@ -153,6 +156,13 @@ antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
 {
     string funcName = ctx->VAR()->getText();
 
+    // Parse and store return type
+    string retTypeStr = ctx->TYPE()->getText();
+    if (retTypeStr == "double") currentFunctionReturnType = DoubleType;
+    else if (retTypeStr == "void") currentFunctionReturnType = VoidType;
+    else currentFunctionReturnType = IntType;
+    functionReturnType[funcName] = currentFunctionReturnType;
+
     // Create a new CFG for this function
     CFG* cfg = new CFG(&this->ir);
     cfg->functionName = funcName;
@@ -234,6 +244,7 @@ antlrcpp::Any IRGenVisitor::visitBlock(ifccParser::BlockContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
+    if (ctx->TYPE()->getText() == "void") return 0;
     currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
@@ -562,14 +573,17 @@ antlrcpp::Any IRGenVisitor::visitBreak_stmt(ifccParser::Break_stmtContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
-    Type exprType = inferExprType(ctx->expr());
-    this->visit(ctx->expr());
+    if (ctx->expr()) {
+        Type exprType = inferExprType(ctx->expr());
+        this->visit(ctx->expr());
 
-    // main doit retourner un int : on caste si l'expression donne un double
-    ensureValueInReg(exprType, IntType);
+        ensureValueInReg(exprType, IntType);
 
-    vector<string> v = {ireg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, v);
+        vector<string> v = {ireg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, v);
+    }
+    // else: bare "return;" -- no rtrn instruction, just trigger epilogue
+
     this->ir.currentCfg->current_bb->has_return = true;
     this->ir.currentCfg->current_bb->exit_true = nullptr;
     this->ir.currentCfg->current_bb->exit_false = nullptr;
