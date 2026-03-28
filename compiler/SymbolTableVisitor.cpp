@@ -209,8 +209,17 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
                  << " arguments, got " << argCount << "\n";
             errorFlag = true;
         }
-        for (auto *arg : f->expr()) {
-            inferExprType(arg);
+        auto argExprs = f->expr();
+        for (size_t i = 0; i < argExprs.size(); i++) {
+            Type argType = inferExprType(argExprs[i]);
+
+            if (functionParamTypes.count(funcName) && i < functionParamTypes[funcName].size()) {
+                Type paramType = functionParamTypes[funcName][i];
+                if (argType == DoubleType && paramType == IntType) {
+                    cerr << "warning: implicit conversion from 'double' to 'int' in argument "
+                         << (i + 1) << " of call to '" << funcName << "'\n";
+                }
+            }
         }
         if (functionReturnType.count(funcName)) {
             return functionReturnType[funcName];
@@ -253,7 +262,7 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
     // Register this function so other functions can call it
     knownFunctions.insert(funcName);
 
-    // Count parameters
+    // Count parameters and store their types
     int paramCount = 0;
     if (ctx->param_list()) {
         auto params = ctx->param_list()->VAR();
@@ -263,17 +272,22 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
 
         // Enter function scope and declare parameters
         enterScope();
+        vector<Type> paramTypes;
         for (size_t i = 0; i < params.size(); i++) {
             if (types[i]->getText() == "void") {
                 cerr << "error: parameter '" << params[i]->getText() << "' has incomplete type 'void'\n";
                 errorFlag = true;
+                paramTypes.push_back(IntType); // placeholder
                 continue;
             }
             Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
+            paramTypes.push_back(paramType);
             declareVar(params[i]->getText(), paramType);
         }
+        functionParamTypes[funcName] = paramTypes;
     } else {
         functionArgCount[funcName] = 0;
+        functionParamTypes[funcName] = {};
         enterScope();
     }
 

@@ -66,6 +66,7 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         map<string, map<string, Type>> getAllSymbolTables() const { return allSymbolTables; }
         map<string, int> getFunctionArgCount() const { return functionArgCount; }
         map<string, Type> getFunctionReturnType() const { return functionReturnType; }
+        map<string, vector<Type>> getFunctionParamTypes() const { return functionParamTypes; }
         virtual antlrcpp::Any visitWhile_stmt(ifccParser::While_stmtContext *ctx) override;
 
         bool hasError() const { return errorFlag; }
@@ -86,5 +87,6 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         set<string> knownFunctions = {"putchar", "getchar"};
         map<string, int> functionArgCount = {{"putchar", 1}, {"getchar", 0}};
         map<string, Type> functionReturnType = {{"putchar", IntType}, {"getchar", IntType}};
+        map<string, vector<Type>> functionParamTypes = {{"putchar", {IntType}}, {"getchar", {}}};
         Type currentFunctionReturnType = IntType;
 };
