@@ -90,6 +90,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Regle arithmetique : int op double => double, sauf modulo
         Type lhs = inferExprType(m->expr(0));
         Type rhs = inferExprType(m->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         string op = m->OP->getText();
         if (op == "%" && (lhs == DoubleType || rhs == DoubleType)) {
             cerr << "error: operator '%' only supports int operands\n";
@@ -102,20 +107,33 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Meme regle de pour + et -
         Type lhs = inferExprType(a->expr(0));
         Type rhs = inferExprType(a->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
     }
 
     if (auto *r = dynamic_cast<ifccParser::RelationalContext *>(ctx)) {
         // Les comparaisons produisent toujours un entier (bool 0 ou 1)
-        inferExprType(r->expr(0));
-        inferExprType(r->expr(1));
+        Type lhs = inferExprType(r->expr(0));
+        Type rhs = inferExprType(r->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+        }
         return IntType;
     }
 
     if (auto *e = dynamic_cast<ifccParser::EqualityContext *>(ctx)) {
         // Les comparaisons produisent toujours un booleen entier (0 ou 1)
-        inferExprType(e->expr(0));
-        inferExprType(e->expr(1));
+        Type lhs = inferExprType(e->expr(0));
+        Type rhs = inferExprType(e->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+        }
         return IntType;
     }
 
@@ -123,6 +141,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Les operateurs bitwise sont reserves aux operandes entiers
         Type lhs = inferExprType(b->expr(0));
         Type rhs = inferExprType(b->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         if (lhs != IntType || rhs != IntType) {
             cerr << "error: bitwise '&' only supports int operands\n";
             errorFlag = true;
@@ -134,6 +157,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Les operateurs bitwise sont reserves aux operandes entiers
         Type lhs = inferExprType(b->expr(0));
         Type rhs = inferExprType(b->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         if (lhs != IntType || rhs != IntType) {
             cerr << "error: bitwise '^' only supports int operands\n";
             errorFlag = true;
@@ -145,6 +173,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Les operateurs bitwise sont reserves aux operandes entiers
         Type lhs = inferExprType(b->expr(0));
         Type rhs = inferExprType(b->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         if (lhs != IntType || rhs != IntType) {
             cerr << "error: bitwise '|' only supports int operands\n";
             errorFlag = true;
@@ -179,6 +212,9 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         for (auto *arg : f->expr()) {
             inferExprType(arg);
         }
+        if (functionReturnType.count(funcName)) {
+            return functionReturnType[funcName];
+        }
         return IntType;
     }
 
@@ -199,6 +235,13 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
         cerr << "error: function '" << funcName << "' already declared\n";
         errorFlag = true;
     }
+
+    // Parse and store return type
+    string retTypeStr = ctx->TYPE()->getText();
+    if (retTypeStr == "double") currentFunctionReturnType = DoubleType;
+    else if (retTypeStr == "void") currentFunctionReturnType = VoidType;
+    else currentFunctionReturnType = IntType;
+    functionReturnType[funcName] = currentFunctionReturnType;
 
     currentFunction = funcName;
     allSymbolTables[currentFunction] = {};
@@ -221,6 +264,11 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
         // Enter function scope and declare parameters
         enterScope();
         for (size_t i = 0; i < params.size(); i++) {
+            if (types[i]->getText() == "void") {
+                cerr << "error: parameter '" << params[i]->getText() << "' has incomplete type 'void'\n";
+                errorFlag = true;
+                continue;
+            }
             Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
             declareVar(params[i]->getText(), paramType);
         }
@@ -254,6 +302,11 @@ antlrcpp::Any SymbolTableVisitor::visitBlock(ifccParser::BlockContext *ctx) {
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
+    if (ctx->TYPE()->getText() == "void") {
+        cerr << "error: variable has incomplete type 'void'\n";
+        errorFlag = true;
+        return 0;
+    }
     // On memorise le type de declaration pour tous les decl_item de l'instruction
     currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
     for (auto *item : ctx->decl_item()) {
@@ -266,7 +319,11 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *c
     string varName = ctx->VAR()->getText();
     declareVar(varName, currentDeclType);
     if (ctx->expr()) {
-        inferExprType(ctx->expr());
+        Type exprType = inferExprType(ctx->expr());
+        if (exprType == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+        }
     }
     return 0;
 }
@@ -321,7 +378,11 @@ antlrcpp::Any SymbolTableVisitor::visitAffectStmt(ifccParser::AffectStmtContext 
     string varName = ctx->VAR()->getText();
     useVar(varName);
     if (ctx->expr()) {
-        inferExprType(ctx->expr());
+        Type exprType = inferExprType(ctx->expr());
+        if (exprType == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+        }
     }
     return 0;
 }
@@ -342,8 +403,18 @@ antlrcpp::Any SymbolTableVisitor::visitElse_stmt(ifccParser::Else_stmtContext *c
 }
 
 antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
-    if (ctx->expr()) {
-        inferExprType(ctx->expr());
+    if (currentFunctionReturnType == VoidType) {
+        if (ctx->expr()) {
+            cerr << "error: void function should not return a value\n";
+            errorFlag = true;
+        }
+    } else {
+        if (ctx->expr()) {
+            inferExprType(ctx->expr());
+        } else {
+            cerr << "error: non-void function should return a value\n";
+            errorFlag = true;
+        }
     }
     return 0;
 }
