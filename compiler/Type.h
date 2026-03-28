@@ -2,6 +2,7 @@
 
 typedef enum {
 	IntType,
-	DoubleType
+	DoubleType,
+	VoidType
 } Type;
 
