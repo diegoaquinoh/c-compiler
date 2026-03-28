@@ -67,6 +67,11 @@ Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         return IntType;
     }
 
+    if (auto *a = dynamic_cast<ifccParser::AffectStmtContext *>(ctx)) {
+        string irName = scopedName(a->VAR()->getText());
+        return this->ir.currentCfg->get_var_type(irName);
+    }
+
     return IntType;
 }
 
@@ -265,13 +270,29 @@ antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
     string irName = scopedName(varName);
     Type varType = this->ir.currentCfg->get_var_type(irName);
 
-    // le type cible est celui de la variable de gauche
+    // le type cible est celui de la lvalue de gauche.
     Type exprType = inferExprType(ctx->expr());
     this->visit(ctx->expr());
     ensureValueInReg(exprType, varType);
 
-    vector<string> v = {irName, activeReg(varType)};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, v);
+    // On sauvegarde la valeur de droite avant de calculer l'adresse et offset de la lvalue
+    // sinon on va l'écraser
+    string rhsTmp = createVariableTmp(varType);
+    vector<string> saveRhs = {rhsTmp, activeReg(varType)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, saveRhs);
+
+    // Lvalue simple pour une variable : offset relatif a %rbp
+    string lvalueOffset = createVariableTmp(IntType);
+    int targetOffset = this->ir.currentCfg->get_var_index_x86(irName);
+    vector<string> ldOffset = {lvalueOffset, to_string(targetOffset)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, ldOffset);
+
+    vector<string> store = {lvalueOffset, rhsTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::wmem, varType, store);
+
+    // On met la valeur dans le registre accumulateur car une affectation doit renvoyer la valeur
+    vector<string> restoreExprVal = {activeReg(varType), rhsTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, restoreExprVal);
 
     return 0;
 }

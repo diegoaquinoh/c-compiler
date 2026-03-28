@@ -799,6 +799,63 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
 
+        case IRInstr::wmem:
+            // On fait l'équivalent de : *(rbp + var1) = var2
+            // Donc rbp + var1 est un pointeur, donc 64 bits
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+
+            if (this->t == DoubleType) {
+                if (nameVar2 == "!freg") {
+                    o << "    movapd %xmm0, %xmm2\n";
+                } else {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movsd " << index2 << "(%rbp), %xmm2\n";
+                }
+
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movslq " << index1 << "(%rbp), %rax\n";
+                o << "    addq %rbp, %rax\n";
+                o << "    movsd %xmm2, (%rax)\n";
+            } else {
+                if (nameVar2 == "!reg") {
+                    o << "    movl %eax, %r10d\n";
+                } else {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movl " << index2 << "(%rbp), %r10d\n";
+                }
+
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movslq " << index1 << "(%rbp), %rax\n";
+                o << "    addq %rbp, %rax\n";
+                o << "    movl %r10d, (%rax)\n";
+            }
+            break;
+        
+        case IRInstr::rmem:
+            // var1 = *(rbp + var2)
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            o << "    movslq " << index2 << "(%rbp), %rax\n";
+            o << "    addq %rbp, %rax\n";
+
+            if (this->t == DoubleType) {
+                o << "    movsd (%rax), %xmm0\n";
+                if (nameVar1 != "!freg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movsd %xmm0, " << index1 << "(%rbp)\n";
+                }
+            } else {
+                o << "    movl (%rax), %eax\n";
+                if (nameVar1 != "!reg")  {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movl %eax, " << index1 << "(%rbp)\n";
+                }
+            }
+            break;
+
         default:
             break;
     }
