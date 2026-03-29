@@ -84,6 +84,8 @@ static const char* opToString(IRInstr::Operation op) {
         case IRInstr::mod:    return "mod";
         case IRInstr::neg:    return "neg";
         case IRInstr::lnot:   return "lnot";
+        case IRInstr::rmem:   return "rmem";
+        case IRInstr::wmem:   return "wmem";
         case IRInstr::itod:   return "itod";
         case IRInstr::dtoi:   return "dtoi";
         case IRInstr::call:   return "call";

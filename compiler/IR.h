@@ -26,6 +26,8 @@ class IRInstr {
         mod,
         neg,
         lnot,
+        rmem,
+        wmem,
         itod,
         dtoi,
         call,
@@ -54,7 +56,7 @@ class IRInstr {
     BasicBlock* bb;
     Operation op;
     Type t;
-    vector<string> params;
+    vector<string> params;  // For 3-op instrs: d, x, y; for ldconst: d, c; for call/rmem/wmem: backend-specific layout.
 };
 
 class BasicBlock {
