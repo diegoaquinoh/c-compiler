@@ -118,6 +118,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     }
 
     if (auto *n = dynamic_cast<ifccParser::NegativeContext *>(ctx)) {
+        if (dynamic_cast<ifccParser::NegativeContext *>(n->expr()) != nullptr) {
+            cerr << "error: double negation is not allowed\n";
+            errorFlag = true;
+            return IntType;
+        }
         return inferExprType(n->expr());
     }
 

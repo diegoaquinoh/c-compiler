@@ -766,19 +766,34 @@ void IRInstr::gen_x86(ostream &o) {
                 o << "    call " << funcName << "@PLT\n";
             #endif
 
-            if (dest != "!reg") {
-                this->bb->cfg->add_to_symbol_table(dest, this->t);
-                int destIndex = this->bb->cfg->get_var_index_x86(dest);
-                o << "    movl %eax, " << destIndex << "(%rbp)\n";
+            if (this->t == DoubleType) {
+                if (dest != "!freg") {
+                    this->bb->cfg->add_to_symbol_table(dest, this->t);
+                    int destIndex = this->bb->cfg->get_var_index_x86(dest);
+                    o << "    movsd %xmm0, " << destIndex << "(%rbp)\n";
+                }
+            } else {
+                if (dest != "!reg") {
+                    this->bb->cfg->add_to_symbol_table(dest, this->t);
+                    int destIndex = this->bb->cfg->get_var_index_x86(dest);
+                    o << "    movl %eax, " << destIndex << "(%rbp)\n";
+                }
             }
             break;
         }
 
         case IRInstr::rtrn:
             nameVar1 = this->params.at(0);
-            if (nameVar1 != "!reg") {
-                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-                o << "    movl " << index1 << "(%rbp), %eax\n";
+            if (this->t == DoubleType) {
+                if (nameVar1 != "!freg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movsd " << index1 << "(%rbp), %xmm0\n";
+                }
+            } else {
+                if (nameVar1 != "!reg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movl " << index1 << "(%rbp), %eax\n";
+                }
             }
             break;
 
