@@ -17,7 +17,7 @@ class IRGenVisitor : public ifccBaseVisitor {
         virtual string createVariableTmp(Type t = IntType);
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
-        virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
+        virtual antlrcpp::Any visitFunc(ifccParser::FuncContext *ctx) override;
         virtual antlrcpp::Any visitBlock(ifccParser::BlockContext *ctx) override;
 
         // Statement visitors
@@ -75,6 +75,9 @@ class IRGenVisitor : public ifccBaseVisitor {
                 int scopeCounter = 0;
                 bool breakTriggered = false;
                 Type currentDeclType = IntType;
+                Type currentFunctionReturnType = IntType;
+                map<string, Type> functionReturnType = {{"putchar", IntType}, {"getchar", IntType}};
+                map<string, vector<Type>> functionParamTypes = {{"putchar", {IntType}}, {"getchar", {}}};
                 IR ir;
                 map<string, int> arraySizeByScopedName;
                 // Scope stack: each entry maps source name -> scoped IR name

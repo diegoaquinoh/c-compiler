@@ -25,7 +25,7 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         bool isVarArray(const string &name) const;
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;
-        virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
+        virtual antlrcpp::Any visitFunc(ifccParser::FuncContext *ctx) override;
         virtual antlrcpp::Any visitBlock(ifccParser::BlockContext *ctx) override;
 
         virtual antlrcpp::Any visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) override ;
@@ -66,6 +66,8 @@ class SymbolTableVisitor: public ifccBaseVisitor {
 
         map<string, map<string, Type>> getAllSymbolTables() const { return allSymbolTables; }
         map<string, int> getFunctionArgCount() const { return functionArgCount; }
+        map<string, Type> getFunctionReturnType() const { return functionReturnType; }
+        map<string, vector<Type>> getFunctionParamTypes() const { return functionParamTypes; }
         virtual antlrcpp::Any visitWhile_stmt(ifccParser::While_stmtContext *ctx) override;
 
         bool hasError() const { return errorFlag; }
@@ -80,6 +82,14 @@ class SymbolTableVisitor: public ifccBaseVisitor {
 
         const VarInfo *lookupVar(const string &name) const;
         bool isLvalueExpr(ifccParser::ExprContext *ctx) const;
+
+        struct FuncSignature {
+            string name;
+            Type returnType;
+            int paramCount;
+            vector<Type> paramTypes;
+        };
+        FuncSignature parseSignature(antlr4::tree::TerminalNode *typeNode, antlr4::tree::TerminalNode *varNode, ifccParser::Param_listContext *paramList);
         Type inferExprType(ifccParser::ExprContext *ctx);
         Type currentDeclType = IntType;
         // Per-function scope stack
@@ -92,6 +102,10 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         set<string> usedVars;
         int nextIndex = 0;
         bool errorFlag = false;
+        set<string> definedFunctions;
         set<string> knownFunctions = {"putchar", "getchar"};
         map<string, int> functionArgCount = {{"putchar", 1}, {"getchar", 0}};
+        map<string, Type> functionReturnType = {{"putchar", IntType}, {"getchar", IntType}};
+        map<string, vector<Type>> functionParamTypes = {{"putchar", {IntType}}, {"getchar", {}}};
+        Type currentFunctionReturnType = IntType;
 };

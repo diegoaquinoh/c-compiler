@@ -2,9 +2,9 @@ grammar ifcc;
 
 axiom : prog EOF ;
 
-prog : func_def+ ;
+prog : func+ ;
 
-func_def : TYPE VAR '(' param_list? ')' block ;
+func : TYPE VAR '(' param_list? ')' (block | ';') ;
 
 param_list : TYPE VAR (',' TYPE VAR)* ;
 
@@ -34,7 +34,7 @@ case_value : '-'? CONST ;
 
 break_stmt : 'break' ';' ;
 
-return_stmt : RETURN expr ';' ;
+return_stmt : RETURN expr? ';' ;
 
 expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | VAR '[' expr ']'                      # arrayAccess

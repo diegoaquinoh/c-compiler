@@ -130,6 +130,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Regle arithmetique : int op double => double, sauf modulo
         Type lhs = inferExprType(m->expr(0));
         Type rhs = inferExprType(m->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         string op = m->OP->getText();
         if (op == "%" && (lhs == DoubleType || rhs == DoubleType)) {
             cerr << "error: operator '%' only supports int operands\n";
@@ -142,20 +147,33 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Meme regle de pour + et -
         Type lhs = inferExprType(a->expr(0));
         Type rhs = inferExprType(a->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
     }
 
     if (auto *r = dynamic_cast<ifccParser::RelationalContext *>(ctx)) {
         // Les comparaisons produisent toujours un entier (bool 0 ou 1)
-        inferExprType(r->expr(0));
-        inferExprType(r->expr(1));
+        Type lhs = inferExprType(r->expr(0));
+        Type rhs = inferExprType(r->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+        }
         return IntType;
     }
 
     if (auto *e = dynamic_cast<ifccParser::EqualityContext *>(ctx)) {
         // Les comparaisons produisent toujours un booleen entier (0 ou 1)
-        inferExprType(e->expr(0));
-        inferExprType(e->expr(1));
+        Type lhs = inferExprType(e->expr(0));
+        Type rhs = inferExprType(e->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+        }
         return IntType;
     }
 
@@ -163,6 +181,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Les operateurs bitwise sont reserves aux operandes entiers
         Type lhs = inferExprType(b->expr(0));
         Type rhs = inferExprType(b->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         if (lhs != IntType || rhs != IntType) {
             cerr << "error: bitwise '&' only supports int operands\n";
             errorFlag = true;
@@ -174,6 +197,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Les operateurs bitwise sont reserves aux operandes entiers
         Type lhs = inferExprType(b->expr(0));
         Type rhs = inferExprType(b->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         if (lhs != IntType || rhs != IntType) {
             cerr << "error: bitwise '^' only supports int operands\n";
             errorFlag = true;
@@ -185,6 +213,11 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         // Les operateurs bitwise sont reserves aux operandes entiers
         Type lhs = inferExprType(b->expr(0));
         Type rhs = inferExprType(b->expr(1));
+        if (lhs == VoidType || rhs == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+            return IntType;
+        }
         if (lhs != IntType || rhs != IntType) {
             cerr << "error: bitwise '|' only supports int operands\n";
             errorFlag = true;
@@ -233,29 +266,119 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
                  << " arguments, got " << argCount << "\n";
             errorFlag = true;
         }
-        for (auto *arg : f->expr()) {
-            inferExprType(arg);
+        auto argExprs = f->expr();
+        for (size_t i = 0; i < argExprs.size(); i++) {
+            Type argType = inferExprType(argExprs[i]);
+
+            if (functionParamTypes.count(funcName) && i < functionParamTypes[funcName].size()) {
+                Type paramType = functionParamTypes[funcName][i];
+                if (argType == DoubleType && paramType == IntType) {
+                    cerr << "warning: implicit conversion from 'double' to 'int' in argument "
+                         << (i + 1) << " of call to '" << funcName << "'\n";
+                }
+            }
+        }
+        if (functionReturnType.count(funcName)) {
+            return functionReturnType[funcName];
         }
         return IntType;
     }
 
     return IntType;
 }
+// --- Signature parsing helper ---
+
+SymbolTableVisitor::FuncSignature SymbolTableVisitor::parseSignature(
+        antlr4::tree::TerminalNode *typeNode, antlr4::tree::TerminalNode *varNode,
+        ifccParser::Param_listContext *paramList) {
+    FuncSignature sig;
+    sig.name = varNode->getText();
+
+    string retTypeStr = typeNode->getText();
+    if (retTypeStr == "double") sig.returnType = DoubleType;
+    else if (retTypeStr == "void") sig.returnType = VoidType;
+    else sig.returnType = IntType;
+
+    sig.paramCount = 0;
+    if (paramList) {
+        auto types = paramList->TYPE();
+        sig.paramCount = types.size();
+        for (size_t i = 0; i < types.size(); i++) {
+            if (types[i]->getText() == "void") {
+                cerr << "error: parameter has incomplete type 'void'\n";
+                errorFlag = true;
+                sig.paramTypes.push_back(IntType);
+                continue;
+            }
+            Type pt = (types[i]->getText() == "double") ? DoubleType : IntType;
+            sig.paramTypes.push_back(pt);
+        }
+    }
+    return sig;
+}
+
 // --- Visitors ---
 
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
-    for (auto *func : ctx->func_def()) {
+    bool hasDefinition = false;
+    for (auto *func : ctx->func()) {
+        if (func->block() != nullptr) {
+            hasDefinition = true;
+        }
         this->visit(func);
+    }
+    if (!hasDefinition) {
+        cerr << "error: program must contain at least one function definition\n";
+        errorFlag = true;
     }
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx) {
-    string funcName = ctx->VAR()->getText();
-    if (knownFunctions.count(funcName)) {
-        cerr << "error: function '" << funcName << "' already declared\n";
-        errorFlag = true;
+antlrcpp::Any SymbolTableVisitor::visitFunc(ifccParser::FuncContext *ctx) {
+    FuncSignature sig = parseSignature(ctx->TYPE(), ctx->VAR(), ctx->param_list());
+    string funcName = sig.name;
+    bool isPrototype = (ctx->block() == nullptr);
+
+    if (isPrototype) {
+        if (knownFunctions.count(funcName)) {
+            bool conflict = false;
+            if (functionReturnType[funcName] != sig.returnType) conflict = true;
+            if (functionArgCount[funcName] != sig.paramCount) conflict = true;
+            if (!conflict && functionParamTypes[funcName] != sig.paramTypes) conflict = true;
+
+            if (conflict) {
+                cerr << "error: conflicting declaration for function '" << funcName << "'\n";
+                errorFlag = true;
+            }
+            return 0;
+        }
+
+        knownFunctions.insert(funcName);
+        functionReturnType[funcName] = sig.returnType;
+        functionArgCount[funcName] = sig.paramCount;
+        functionParamTypes[funcName] = sig.paramTypes;
+        return 0;
     }
+
+    if (definedFunctions.count(funcName)) {
+        cerr << "error: function '" << funcName << "' already defined\n";
+        errorFlag = true;
+    } else if (knownFunctions.count(funcName)) {
+        bool conflict = false;
+        if (functionReturnType[funcName] != sig.returnType) conflict = true;
+        if (functionArgCount[funcName] != sig.paramCount) conflict = true;
+        if (!conflict && functionParamTypes[funcName] != sig.paramTypes) conflict = true;
+
+        if (conflict) {
+            cerr << "error: conflicting types for function '" << funcName << "'\n";
+            errorFlag = true;
+        }
+    }
+
+    currentFunctionReturnType = sig.returnType;
+    functionReturnType[funcName] = sig.returnType;
+    knownFunctions.insert(funcName);
+    definedFunctions.insert(funcName);
 
     currentFunction = funcName;
     allSymbolTables[currentFunction] = {};
@@ -264,29 +387,22 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
     usedVars.clear();
     nextIndex = 0;
 
-    // Register this function so other functions can call it
-    knownFunctions.insert(funcName);
+    auto *paramList = ctx->param_list();
+    if (paramList) {
+        auto params = paramList->VAR();
+        functionArgCount[funcName] = params.size();
+        functionParamTypes[funcName] = sig.paramTypes;
 
-    // Count parameters
-    int paramCount = 0;
-    if (ctx->param_list()) {
-        auto params = ctx->param_list()->VAR();
-        auto types = ctx->param_list()->TYPE();
-        paramCount = params.size();
-        functionArgCount[funcName] = paramCount;
-
-        // Enter function scope and declare parameters
         enterScope();
         for (size_t i = 0; i < params.size(); i++) {
-            Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
-            declareVar(params[i]->getText(), paramType);
+            declareVar(params[i]->getText(), sig.paramTypes[i]);
         }
     } else {
         functionArgCount[funcName] = 0;
+        functionParamTypes[funcName] = {};
         enterScope();
     }
 
-    // Visit the function body block (block will handle its own scope)
     this->visit(ctx->block());
 
     for (auto &[name, idx] : allSymbolTables[currentFunction]) {
@@ -311,6 +427,11 @@ antlrcpp::Any SymbolTableVisitor::visitBlock(ifccParser::BlockContext *ctx) {
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
+    if (ctx->TYPE()->getText() == "void") {
+        cerr << "error: variable has incomplete type 'void'\n";
+        errorFlag = true;
+        return 0;
+    }
     // On memorise le type de declaration pour tous les decl_item de l'instruction
     currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
     for (auto *item : ctx->decl_item()) {
@@ -342,7 +463,11 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *c
     declareVar(varName, currentDeclType, isArray, arraySize);
 
     if (ctx->expr()) {
-        inferExprType(ctx->expr());
+        Type exprType = inferExprType(ctx->expr());
+        if (exprType == VoidType) {
+            cerr << "error: void value not ignored as it ought to be\n";
+            errorFlag = true;
+        }
     }
     return 0;
 }
@@ -414,8 +539,18 @@ antlrcpp::Any SymbolTableVisitor::visitElse_stmt(ifccParser::Else_stmtContext *c
 }
 
 antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
-    if (ctx->expr()) {
-        inferExprType(ctx->expr());
+    if (currentFunctionReturnType == VoidType) {
+        if (ctx->expr()) {
+            cerr << "error: void function should not return a value\n";
+            errorFlag = true;
+        }
+    } else {
+        if (ctx->expr()) {
+            inferExprType(ctx->expr());
+        } else {
+            cerr << "error: non-void function should return a value\n";
+            errorFlag = true;
+        }
     }
     return 0;
 }
