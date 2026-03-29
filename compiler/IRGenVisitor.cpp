@@ -707,12 +707,13 @@ antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx
 {
     if (ctx->expr()) {
         Type exprType = inferExprType(ctx->expr());
+        Type retType = (currentFunctionReturnType == VoidType) ? IntType : currentFunctionReturnType;
         this->visit(ctx->expr());
 
-        ensureValueInReg(exprType, IntType);
+        ensureValueInReg(exprType, retType);
 
-        vector<string> v = {ireg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, v);
+        vector<string> v = {activeReg(retType)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, retType, v);
     }
     // else: bare "return;" -- no rtrn instruction, just trigger epilogue
 
@@ -900,6 +901,10 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
 antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     string funcName = ctx->VAR()->getText();
     auto args = ctx->expr();
+    Type retType = IntType;
+    if (functionReturnType.count(funcName)) {
+        retType = functionReturnType[funcName];
+    }
 
     // 1. Evaluate each arg and convert to the expected parameter type
     vector<string> argTempNames;
@@ -923,9 +928,9 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     }
 
     // 2. Generate call instruction with the function name and the temp stack slots as arguments
-    vector<string> callArgs = {ireg, funcName};
+    vector<string> callArgs = {activeReg(retType), funcName};
     callArgs.insert(callArgs.end(), argTempNames.begin(), argTempNames.end());
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, callArgs);
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, retType, callArgs);
     return 0;
 }
 
