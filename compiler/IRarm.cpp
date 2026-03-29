@@ -1,4 +1,29 @@
 #include "IR.h"
+#include <cstdint>
+#include <cstring>
+
+static void emitLoadImm32(ostream &o, const string &reg, int32_t value) {
+    uint32_t u = static_cast<uint32_t>(value);
+    uint16_t lo = static_cast<uint16_t>(u & 0xFFFFu);
+    uint16_t hi = static_cast<uint16_t>((u >> 16) & 0xFFFFu);
+
+    o << "    movz " << reg << ", #" << lo << "\n";
+    if (hi != 0) {
+        o << "    movk " << reg << ", #" << hi << ", lsl #16\n";
+    }
+}
+
+static void emitLoadImm64(ostream &o, const string &reg, uint64_t value) {
+    uint16_t p0 = static_cast<uint16_t>(value & 0xFFFFu);
+    uint16_t p1 = static_cast<uint16_t>((value >> 16) & 0xFFFFu);
+    uint16_t p2 = static_cast<uint16_t>((value >> 32) & 0xFFFFu);
+    uint16_t p3 = static_cast<uint16_t>((value >> 48) & 0xFFFFu);
+
+    o << "    movz " << reg << ", #" << p0 << "\n";
+    if (p1 != 0) o << "    movk " << reg << ", #" << p1 << ", lsl #16\n";
+    if (p2 != 0) o << "    movk " << reg << ", #" << p2 << ", lsl #32\n";
+    if (p3 != 0) o << "    movk " << reg << ", #" << p3 << ", lsl #48\n";
+}
 
 void IR::gen_arm(ostream &o) {
     for (const auto& entry : cfgsMap) {
@@ -14,7 +39,8 @@ void IR::gen_arm(ostream &o) {
 }
 
 int CFG::get_var_index_arm(string name){
-    return -4 * this->SymbolIndex.at(name);
+    // Keep 8-byte slots so frame offsets match the IR-level offset arithmetic.
+    return -8 * this->SymbolIndex.at(name);
 }
 
 void CFG::gen_arm_prologue(ostream &o){
@@ -30,7 +56,11 @@ void CFG::gen_arm_prologue(ostream &o){
     o << "    stp x29, x30, [sp, #-16]!\n";
     o << "    mov x29, sp\n";
 
-    int size = static_cast<int>(this->SymbolIndex.size()) * 4 + 4;
+    // Reserve internal accumulators used by IR lowering.
+    this->add_to_symbol_table("!reg", IntType);
+    this->add_to_symbol_table("!freg", DoubleType);
+
+    int size = this->nextFreeSymbolIndex * 8;
     // Add padding for temp variables created during codegen
     size += 64;
 
@@ -92,14 +122,21 @@ void IRInstr::gen_arm(ostream &o) {
     switch(this->op) {
         case IRInstr::ldconst:
             nameVar1 = this->params.at(0);
-            nb = stoi(this->params.at(1));
-
             this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
-
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
 
-            o << "    mov w8, #" << nb << "\n";
-            o << "    str w8, [x29, #" << index1 << "]\n";
+            if (this->t == DoubleType) {
+                double value = stod(this->params.at(1));
+                uint64_t bits = 0;
+                std::memcpy(&bits, &value, sizeof(bits));
+                emitLoadImm64(o, "x8", bits);
+                o << "    fmov d0, x8\n";
+                o << "    str d0, [x29, #" << index1 << "]\n";
+            } else {
+                nb = stoi(this->params.at(1));
+                emitLoadImm32(o, "w8", nb);
+                o << "    str w8, [x29, #" << index1 << "]\n";
+            }
             break;
         case IRInstr::add:
             nameVar1 = this->params.at(0);
@@ -264,9 +301,74 @@ void IRInstr::gen_arm(ostream &o) {
 
             this->bb->cfg->add_to_symbol_table(dest, this->t);
             int destIndex = this->bb->cfg->get_var_index_arm(dest);
-            o << "    str w0, [x29, #" << destIndex << "]\n";
+            if (this->t == DoubleType) {
+                o << "    str d0, [x29, #" << destIndex << "]\n";
+            } else {
+                o << "    str w0, [x29, #" << destIndex << "]\n";
+            }
             break;
         }
+        case IRInstr::itod:
+            // var1 (double) = (double) var2 (int)
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+
+            index1 = this->bb->cfg->get_var_index_arm(nameVar1);
+            index2 = this->bb->cfg->get_var_index_arm(nameVar2);
+
+            o << "    ldr w8, [x29, #" << index2 << "]\n";
+            o << "    scvtf d0, w8\n";
+            o << "    str d0, [x29, #" << index1 << "]\n";
+            break;
+        case IRInstr::dtoi:
+            // var1 (int) = (int) var2 (double)
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+
+            index1 = this->bb->cfg->get_var_index_arm(nameVar1);
+            index2 = this->bb->cfg->get_var_index_arm(nameVar2);
+
+            o << "    ldr d0, [x29, #" << index2 << "]\n";
+            o << "    fcvtzs w8, d0\n";
+            o << "    str w8, [x29, #" << index1 << "]\n";
+            break;
+        case IRInstr::wmem:
+            // *(x29 + offsetVar) = valueVar
+            nameVar1 = this->params.at(0); // offset
+            nameVar2 = this->params.at(1); // value
+
+            index1 = this->bb->cfg->get_var_index_arm(nameVar1);
+            index2 = this->bb->cfg->get_var_index_arm(nameVar2);
+
+            o << "    ldrsw x8, [x29, #" << index1 << "]\n";
+            o << "    add x8, x29, x8\n";
+            if (this->t == DoubleType) {
+                o << "    ldr d0, [x29, #" << index2 << "]\n";
+                o << "    str d0, [x8]\n";
+            } else {
+                o << "    ldr w0, [x29, #" << index2 << "]\n";
+                o << "    str w0, [x8]\n";
+            }
+            break;
+        case IRInstr::rmem:
+            // var1 = *(x29 + offsetVar)
+            nameVar1 = this->params.at(0); // destination
+            nameVar2 = this->params.at(1); // offset
+
+            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            index1 = this->bb->cfg->get_var_index_arm(nameVar1);
+            index2 = this->bb->cfg->get_var_index_arm(nameVar2);
+
+            o << "    ldrsw x8, [x29, #" << index2 << "]\n";
+            o << "    add x8, x29, x8\n";
+            if (this->t == DoubleType) {
+                o << "    ldr d0, [x8]\n";
+                o << "    str d0, [x29, #" << index1 << "]\n";
+            } else {
+                o << "    ldr w0, [x8]\n";
+                o << "    str w0, [x29, #" << index1 << "]\n";
+            }
+            break;
         case IRInstr::bxor:
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
