@@ -1,58 +1,18 @@
-List of tests that are supposed to fail because not yet supported by our compiler:
+These failed:
 
-In chronological order :
+11_05 — if_with_logical_and_or
+13_07 — scope_shadow_array
+13_11 — invalid_zero_size
+13_15 — invalid_array_scalar_expr
+1_1 — test_avec_deux_accolades
+2_49 — neg_double
+2_50 — neg_triple
+4_11 — missing_int_main
+4_18 — empty_return
+4_23 — double_semicolon
+4_40 — double_braces
+8_21 — call_before_def
+8_25 — void_return_value
+9_15 — missing_switch_brace
 
-1_1
-2_140
-2_141
-2_142
-2_165
-
-2_53
-2_55
-2_66
-2_72
-2_97
-3_13
-
-4_07
-4_11
-4_18
-4_23
-4_40
-
-6_05
-6_10
-7_13
-
-Explanation :
-
-Scope and '{' '}' usage - not yet supported 
-    Tests 1_1 and 4_40
-
-Main declared without "int" (depends on the compiler)
-    Test 4_11 
-
-Main does not support argc and argv 
-    Test 4_07
-
-We don't support -- operator, we consider it as a double negation
-    Tests 2_49 and 2_50
-
-We don't accept empty lines (double semicolon ;;)
-    Tests 4_23
-
-Not implemented && nor || 
-    Test 6_10
-
-Not normal, needs verifying: - Louis' operator priority probably
-    2_140, 2_141, 2_142, 2_165, 2_53, 2_55, 2_66, 2_72, 2_97, 3_13
-
-We still dont support empty returns (return;)
-    Test 4_18
-
-Character problem :
-    Tests 4_04 and 4_25
-
-Not normal but still not functional (problem with if, idk why):
-    Tests 6_05, 7_13
+Total: 14 failed tests.
