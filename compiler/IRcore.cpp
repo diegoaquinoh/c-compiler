@@ -1,17 +1,9 @@
 #include "IR.h"
 #include <sstream>
 
-// IR //
-
 IR::IR() {
     this->currentCfg = nullptr;
 }
-
-// IR::~IR() {
-//     delete currentCfg;
-// }
-
-// CFG //
 
 void CFG::add_bb(BasicBlock* bb){
     if (bb == nullptr) {
@@ -31,26 +23,6 @@ void CFG::add_to_symbol_table(string name, Type t){
     this->SymbolType[name] = t;
     this->SymbolIndex[name] = this->nextFreeSymbolIndex;
     this->nextFreeSymbolIndex += (t == DoubleType) ? 2 : 1;
-}
-
-
-string CFG::create_new_tempvar(Type t){
-
-    int tempIndex = static_cast<int>(this->SymbolIndex.size());
-    string tempName;
-    tempName = "tmp" + to_string(tempIndex);
-
-    while (this->SymbolIndex.find(tempName) != this->SymbolIndex.end()){
-        ++tempIndex;
-        tempName = "tmp" + to_string(tempIndex);
-    }
-
-    this->add_to_symbol_table(tempName, t);
-    return tempName;
-}
-
-int CFG::get_var_index(string name){
-    return this->SymbolIndex.at(name);
 }
 
 int CFG::get_var_frame_offset(string name){
@@ -84,11 +56,6 @@ BasicBlock* CFG::get_break_target() const {
     return this->breakTargets.back();
 }
 
-
-
-
-// BasicBlock // 
-
 BasicBlock::BasicBlock(CFG* cfg, string entry_label) {
     this->cfg = cfg;
     this->label = entry_label;
@@ -106,8 +73,6 @@ void BasicBlock::add_IRInstr(IRInstr::Operation op) {
     this->instrs.push_back(nouvInstr);
 }
 
-
-// Print operations
 static const char* opToString(IRInstr::Operation op) {
     switch (op) {
         case IRInstr::ldconst: return "ldconst";

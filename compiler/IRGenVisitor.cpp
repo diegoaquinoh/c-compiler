@@ -219,7 +219,7 @@ antlrcpp::Any IRGenVisitor::visitFunc(ifccParser::FuncContext *ctx)
     }
 
     // Full function definition — create CFG and generate IR
-    CFG* cfg = new CFG(&this->ir);
+    CFG* cfg = new CFG();
     cfg->functionName = funcName;
 
     // Reset scope state
