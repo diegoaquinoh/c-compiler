@@ -35,6 +35,8 @@ class IRGenVisitor : public ifccBaseVisitor {
         // Expression visitors
 
         virtual antlrcpp::Any visitNegative(ifccParser::NegativeContext *ctx) override;
+        virtual antlrcpp::Any visitDeref(ifccParser::DerefContext *ctx) override;
+        virtual antlrcpp::Any visitAddressOf(ifccParser::AddressOfContext *ctx) override;
         virtual antlrcpp::Any visitParens(ifccParser::ParensContext *ctx) override;
 
         virtual antlrcpp::Any visitMultdiv(ifccParser::MultdivContext *ctx) override;
@@ -67,19 +69,34 @@ class IRGenVisitor : public ifccBaseVisitor {
 
         private:
                 Type inferExprType(ifccParser::ExprContext *ctx);
+                bool inferPointerInfo(ifccParser::ExprContext *ctx, Type &outBaseType, int &outDepth);
+                int pointerElementSize(Type baseType, int depth) const;
                 string activeReg(Type t) const;
                 void emitConvert(Type src, Type dst, const string &srcName, const string &dstName);
                 void ensureValueInReg(Type currentType, Type targetType);
                 string emitArrayElementOffset(const string &arrayScopedName, ifccParser::ExprContext *indexExpr);
+                string emitScaledPointerOffset(ifccParser::ExprContext *indexExpr, int elemSize);
+                Type parseDeclaredType(const string &typeText, ifccParser::Ptr_suffixContext *ptrSuffix, Type &outPointeeType, int &outPointerDepth) const;
+                bool isZeroLiteralExpr(ifccParser::ExprContext *ctx) const;
                 int cptTempVariables = 0;
                 int scopeCounter = 0;
                 bool breakTriggered = false;
                 Type currentDeclType = IntType;
+                Type currentDeclPointeeType = IntType;
+                int currentDeclPointerDepth = 0;
                 Type currentFunctionReturnType = IntType;
+                Type currentFunctionReturnPointeeType = IntType;
+                int currentFunctionReturnPointerDepth = 0;
                 map<string, Type> functionReturnType = {{"putchar", IntType}, {"getchar", IntType}};
+                map<string, Type> functionReturnPointeeType = {{"putchar", IntType}, {"getchar", IntType}};
+                map<string, int> functionReturnPointerDepth = {{"putchar", 0}, {"getchar", 0}};
                 map<string, vector<Type>> functionParamTypes = {{"putchar", {IntType}}, {"getchar", {}}};
+                map<string, vector<Type>> functionParamPointeeTypes = {{"putchar", {IntType}}, {"getchar", {}}};
+                map<string, vector<int>> functionParamPointerDepths = {{"putchar", {0}}, {"getchar", {}}};
                 IR ir;
                 map<string, int> arraySizeByScopedName;
+                map<string, Type> pointerPointeeTypeByScopedName;
+                map<string, int> pointerDepthByScopedName;
                 // Scope stack: each entry maps source name -> scoped IR name
                 vector<map<string, string>> scopeStack;
 

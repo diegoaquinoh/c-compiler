@@ -31,6 +31,9 @@ class IRInstr {
 		mod,
 		neg, // -(1) => neg var1 => var1 = -var1
 		lnot,
+		addrof,
+		rind,
+		wind,
 		rmem,
 		wmem,
 		itod,

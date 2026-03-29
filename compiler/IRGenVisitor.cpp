@@ -4,6 +4,7 @@ using namespace std;
 
 static const string ireg = "!reg";
 static const string freg = "!freg";
+static const string preg = "!preg";
 
 static int getCaseValue(ifccParser::Case_valueContext *ctx) {
     return stoi(ctx->getText());
@@ -11,7 +12,118 @@ static int getCaseValue(ifccParser::Case_valueContext *ctx) {
 
 string IRGenVisitor::activeReg(Type t) const {
     // On reserve !reg aux entiers et !freg aux doubles.
-    return (t == DoubleType) ? freg : ireg;
+    if (t == DoubleType) return freg;
+    if (t == PointerType) return preg;
+    return ireg;
+}
+
+Type IRGenVisitor::parseDeclaredType(const string &typeText, ifccParser::Ptr_suffixContext *ptrSuffix, Type &outPointeeType, int &outPointerDepth) const {
+    outPointeeType = IntType;
+    outPointerDepth = 0;
+
+    Type baseType = (typeText == "double") ? DoubleType :
+                    (typeText == "void") ? VoidType :
+                    IntType;
+
+    string suffix = ptrSuffix ? ptrSuffix->getText() : "";
+    if (suffix.empty()) {
+        // on a pas de '*' donc c'est pas un pointeur
+        return baseType;
+    }
+
+    outPointerDepth = static_cast<int>(suffix.size());
+    outPointeeType = baseType;
+    return PointerType;
+}
+
+int IRGenVisitor::pointerElementSize(Type baseType, int depth) const {
+    if (depth > 1) return 8;
+    if (baseType == DoubleType) return 8;
+    if (baseType == VoidType) return 1;
+    return 4;
+}
+
+/**
+ * Permet de savoir si le "type final" de l'expression est un pointeur, 
+ * son type scalaire (int/double), et le niveau d'indirection
+ */
+bool IRGenVisitor::inferPointerInfo(ifccParser::ExprContext *ctx, Type &outBaseType, int &outDepth) {
+    outBaseType = IntType;
+    outDepth = 0;
+
+    if (ctx == nullptr) return false;
+
+    if (auto *p = dynamic_cast<ifccParser::ParensContext *>(ctx)) {
+        return inferPointerInfo(p->expr(), outBaseType, outDepth);
+    }
+
+    if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
+        string irName = scopedName(v->VAR()->getText());
+        if (!pointerDepthByScopedName.count(irName)) return false;
+        outBaseType = pointerPointeeTypeByScopedName[irName];
+        outDepth = pointerDepthByScopedName[irName];
+        return outDepth > 0;
+    }
+
+    if (auto *f = dynamic_cast<ifccParser::FuncCallContext *>(ctx)) {
+        string fn = f->VAR()->getText();
+        if (!functionReturnPointerDepth.count(fn) || functionReturnPointerDepth[fn] == 0) return false;
+        outBaseType = functionReturnPointeeType[fn];
+        outDepth = functionReturnPointerDepth[fn];
+        return true;
+    }
+
+    if (auto *a = dynamic_cast<ifccParser::AddressOfContext *>(ctx)) {
+        Type base;
+        int depth;
+        if (inferPointerInfo(a->expr(), base, depth)) {
+            outBaseType = base;
+            outDepth = depth + 1;
+            return true;
+        }
+        outBaseType = inferExprType(a->expr());
+        outDepth = 1;
+        return true;
+    }
+
+    if (auto *d = dynamic_cast<ifccParser::DerefContext *>(ctx)) {
+        Type base;
+        int depth;
+        if (!inferPointerInfo(d->expr(), base, depth) || depth == 0) {
+            return false;
+        }
+        if (depth == 1) { 
+            return false;
+        }
+        outBaseType = base;
+        outDepth = depth - 1;
+        return true;
+    }
+
+    if (auto *a = dynamic_cast<ifccParser::AddsubContext *>(ctx)) {
+        Type lhsBase; int lhsDepth;
+        Type rhsBase; int rhsDepth;
+        bool lhsPtr = inferPointerInfo(a->expr(0), lhsBase, lhsDepth);
+        bool rhsPtr = inferPointerInfo(a->expr(1), rhsBase, rhsDepth);
+        if (lhsPtr && !rhsPtr) {
+            outBaseType = lhsBase;
+            outDepth = lhsDepth;
+            return true;
+        }
+        if (!lhsPtr && rhsPtr && a->OP->getText() == "+") {
+            outBaseType = rhsBase;
+            outDepth = rhsDepth;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool IRGenVisitor::isZeroLiteralExpr(ifccParser::ExprContext *ctx) const {
+    // Util pour savoir si c'est un pointeur null
+    auto *c = dynamic_cast<ifccParser::ConstContext *>(ctx);
+    return c != nullptr && c->CONST() != nullptr && c->CONST()->getText() == "0";
 }
 
 Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
@@ -43,6 +155,26 @@ Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         return inferExprType(n->expr());
     }
 
+    if (auto *d = dynamic_cast<ifccParser::DerefContext *>(ctx)) {
+        Type ptrType = inferExprType(d->expr());
+        if (ptrType != PointerType) {
+            return IntType;
+        }
+        Type base = IntType;
+        int depth = 0;
+        if (inferPointerInfo(d->expr(), base, depth)) {
+            if (depth > 1) {
+                return PointerType;
+            }
+            return base;
+        }
+        return IntType;
+    }
+
+    if (dynamic_cast<ifccParser::AddressOfContext *>(ctx)) {
+        return PointerType;
+    }
+
     if (dynamic_cast<ifccParser::LogicalnotContext *>(ctx)) {
         return IntType;
     }
@@ -59,6 +191,16 @@ Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     if (auto *a = dynamic_cast<ifccParser::AddsubContext *>(ctx)) {
         Type lhs = inferExprType(a->expr(0));
         Type rhs = inferExprType(a->expr(1));
+        if (lhs == PointerType && rhs == PointerType) {
+            if (a->OP->getText() == "-") {
+                return IntType;
+            }
+            // Théoriquement on ne devrait jamais arriver là car SymbolTableVisitor interdit ptr +ptr
+            return PointerType;
+        }
+        if (lhs == PointerType || rhs == PointerType) {
+            return PointerType;
+        }
         return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
     }
 
@@ -99,7 +241,6 @@ void IRGenVisitor::emitConvert(Type src, Type dst, const string &srcName, const 
     }
 
     if (src == DoubleType && dst == IntType) {
-        // Toujours vraie cette condition ?
         vector<string> conv = {dstName, srcName};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::dtoi, IntType, conv);
     }
@@ -147,6 +288,24 @@ string IRGenVisitor::emitArrayElementOffset(const string &arrayScopedName, ifccP
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, sumOffset);
 
     return finalOffsetTmp;
+}
+
+/**
+ * Pour l'arithmétique des ponteurs, retourne la taille à ajouter/soustraire en fonction du pointeur représenté par indexExpr
+ */
+string IRGenVisitor::emitScaledPointerOffset(ifccParser::ExprContext *indexExpr, int elemSize) {
+    this->visit(indexExpr);
+    ensureValueInReg(inferExprType(indexExpr), IntType);
+
+    string idxTmp = createVariableTmp(IntType);
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, {idxTmp, ireg});
+
+    string sizeTmp = createVariableTmp(IntType);
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, {sizeTmp, to_string(elemSize)});
+
+    string scaledTmp = createVariableTmp(IntType);
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, {scaledTmp, idxTmp, sizeTmp});
+    return scaledTmp;
 }
 
 // --- Scope management for variable renaming ---
@@ -199,22 +358,31 @@ antlrcpp::Any IRGenVisitor::visitFunc(ifccParser::FuncContext *ctx)
     string funcName = ctx->VAR()->getText();
 
     string retTypeStr = ctx->TYPE()->getText();
-    if (retTypeStr == "double") currentFunctionReturnType = DoubleType;
-    else if (retTypeStr == "void") currentFunctionReturnType = VoidType;
-    else currentFunctionReturnType = IntType;
+    currentFunctionReturnType = parseDeclaredType(retTypeStr, ctx->ptr_suffix(), currentFunctionReturnPointeeType, currentFunctionReturnPointerDepth);
     functionReturnType[funcName] = currentFunctionReturnType;
+    functionReturnPointeeType[funcName] = currentFunctionReturnPointeeType;
+    functionReturnPointerDepth[funcName] = currentFunctionReturnPointerDepth;
 
     vector<Type> paramTypes;
+    vector<Type> paramPointeeTypes;
+    vector<int> paramPointerDepths;
     if (ctx->param_list()) {
         auto *paramList = ctx->param_list();
         auto types = paramList->TYPE();
+        auto ptrSuffixes = paramList->ptr_suffix();
         for (size_t i = 0; i < types.size(); i++) {
-            Type pt = (types[i]->getText() == "double") ? DoubleType : IntType;
+            Type pointee = IntType;
+            int pdepth = 0;
+            Type pt = parseDeclaredType(types[i]->getText(), i < ptrSuffixes.size() ? ptrSuffixes[i] : nullptr, pointee, pdepth);
             paramTypes.push_back(pt);
+            paramPointeeTypes.push_back(pointee);
+            paramPointerDepths.push_back(pdepth);
         }
     }
     if (ctx->block() == nullptr) {
         functionParamTypes[funcName] = paramTypes;
+        functionParamPointeeTypes[funcName] = paramPointeeTypes;
+        functionParamPointerDepths[funcName] = paramPointerDepths;
         return 0;
     }
 
@@ -226,24 +394,41 @@ antlrcpp::Any IRGenVisitor::visitFunc(ifccParser::FuncContext *ctx)
     scopeStack.clear();
     scopeCounter = 0;
     arraySizeByScopedName.clear();
+    pointerPointeeTypeByScopedName.clear();
+    pointerDepthByScopedName.clear();
     enterScope(); // function-level scope
 
     // Register parameter names and types
     if (ctx->param_list()) {
         auto params = ctx->param_list()->VAR();
         auto types = ctx->param_list()->TYPE();
+        auto ptrSuffixes = ctx->param_list()->ptr_suffix();
         vector<Type> definitionParamTypes;
+        vector<Type> definitionParamPointeeTypes;
+        vector<int> definitionParamPointerDepths;
         for (size_t i = 0; i < params.size(); i++) {
             string paramName = params[i]->getText();
             string irName = declareScoped(paramName);
             cfg->paramNames.push_back(irName);
-            Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
+            Type pointee = IntType;
+            int pdepth = 0;
+            Type paramType = parseDeclaredType(types[i]->getText(), i < ptrSuffixes.size() ? ptrSuffixes[i] : nullptr, pointee, pdepth);
             definitionParamTypes.push_back(paramType);
+            definitionParamPointeeTypes.push_back(pointee);
+            definitionParamPointerDepths.push_back(pdepth);
             cfg->add_to_symbol_table(irName, paramType);
+            if (paramType == PointerType) {
+                pointerPointeeTypeByScopedName[irName] = pointee;
+                pointerDepthByScopedName[irName] = pdepth;
+            }
         }
         functionParamTypes[funcName] = definitionParamTypes;
+        functionParamPointeeTypes[funcName] = definitionParamPointeeTypes;
+        functionParamPointerDepths[funcName] = definitionParamPointerDepths;
     } else {
         functionParamTypes[funcName] = {};
+        functionParamPointeeTypes[funcName] = {};
+        functionParamPointerDepths[funcName] = {};
     }
 
     // Set up basic blocks: prologue -> body -> epilogue
@@ -305,8 +490,8 @@ antlrcpp::Any IRGenVisitor::visitBlock(ifccParser::BlockContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
-    if (ctx->TYPE()->getText() == "void") return 0;
-    currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
+    if (ctx->TYPE()->getText() == "void" && ctx->ptr_suffix()->getText().empty()) return 0;
+    currentDeclType = parseDeclaredType(ctx->TYPE()->getText(), ctx->ptr_suffix(), currentDeclPointeeType, currentDeclPointerDepth);
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
     }
@@ -318,6 +503,10 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
     string varName = ctx->VAR()->getText();
     string irName = declareScoped(varName);
     this->ir.currentCfg->add_to_symbol_table(irName, currentDeclType);
+    if (currentDeclType == PointerType) {
+        pointerPointeeTypeByScopedName[irName] = currentDeclPointeeType;
+        pointerDepthByScopedName[irName] = currentDeclPointerDepth;
+    }
 
     if (ctx->CONST()) {
         // Alors c'est la déclaration d'un tableau
@@ -345,6 +534,42 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 {
+    auto *lhsDeref = dynamic_cast<ifccParser::DerefContext *>(ctx->expr(0));
+    if (lhsDeref != nullptr) {
+        Type targetType = inferExprType(ctx->expr(0));
+
+        Type rhsType = inferExprType(ctx->expr(1));
+        this->visit(ctx->expr(1));
+        if (targetType == PointerType && rhsType == IntType && isZeroLiteralExpr(ctx->expr(1))) {
+            // cas pointeur null
+            vector<string> z = {preg, "0"};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, PointerType, z);
+        } else {
+            ensureValueInReg(rhsType, targetType);
+        }
+
+        // On save la rhs pour ne pas l'écraser
+        string rhsTmp = createVariableTmp(targetType);
+        vector<string> saveRhs = {rhsTmp, activeReg(targetType)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, targetType, saveRhs);
+
+        // On calcule ensuite l'adresse portée par la lvalue (*p, **pp, ...)
+        this->visit(lhsDeref->expr());
+        ensureValueInReg(inferExprType(lhsDeref->expr()), PointerType);
+        string ptrTmp = createVariableTmp(PointerType);
+        vector<string> savePtr = {ptrTmp, preg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, savePtr);
+
+        // On écrit dans la destination *(ptrTmp) = rhsTmp
+        vector<string> storeInd = {ptrTmp, rhsTmp};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::wind, targetType, storeInd);
+
+        // On met dans reg car en c, une affectation renvoie la valeur affectée
+        vector<string> restoreExprVal = {activeReg(targetType), rhsTmp};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, targetType, restoreExprVal);
+        return 0;
+    }
+
     auto *lhsArray = dynamic_cast<ifccParser::ArrayAccessContext *>(ctx->expr(0));
 
     if (lhsArray != nullptr) {
@@ -381,7 +606,12 @@ antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
     // le type cible est celui de la lvalue de gauche
     Type exprType = inferExprType(ctx->expr(1));
     this->visit(ctx->expr(1));
-    ensureValueInReg(exprType, varType);
+    if (varType == PointerType && exprType == IntType && isZeroLiteralExpr(ctx->expr(1))) {
+        vector<string> z = {preg, "0"};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, PointerType, z);
+    } else {
+        ensureValueInReg(exprType, varType);
+    }
 
     // On sauvegarde la valeur de droite avant de calculer l'adresse et offset de la lvalue
     // sinon on va l'écraser
@@ -708,11 +938,15 @@ antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx
     if (ctx->expr()) {
         Type exprType = inferExprType(ctx->expr());
         this->visit(ctx->expr());
+        if (currentFunctionReturnType == PointerType && exprType == IntType && isZeroLiteralExpr(ctx->expr())) {
+            vector<string> z = {preg, "0"};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, PointerType, z);
+        } else {
+            ensureValueInReg(exprType, currentFunctionReturnType);
+        }
 
-        ensureValueInReg(exprType, IntType);
-
-        vector<string> v = {ireg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, IntType, v);
+        vector<string> v = {activeReg(currentFunctionReturnType)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, currentFunctionReturnType, v);
     }
     // else: bare "return;" -- no rtrn instruction, just trigger epilogue
 
@@ -793,6 +1027,62 @@ antlrcpp::Any IRGenVisitor::visitAddsub(ifccParser::AddsubContext *ctx)
 
     Type lhsType = inferExprType(ctx->expr(0));
     Type rhsType = inferExprType(ctx->expr(1));
+
+    if (lhsType == PointerType && rhsType == PointerType && op == "-") {
+        // Normalement pas besoin de la vérif que ce soit un "-" mais au cas où
+        // ptrdiff: (p - q) / sizeof(*p), soit le nombre de case entre chaque pointeur
+        Type baseType = IntType;
+        int depth = 1;
+        inferPointerInfo(ctx->expr(0), baseType, depth);
+        int elemSize = pointerElementSize(baseType, depth);
+
+        this->visit(ctx->expr(0));
+        string lhsPtr = createVariableTmp(PointerType);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, {lhsPtr, preg});
+
+        this->visit(ctx->expr(1));
+        string rhsPtr = createVariableTmp(PointerType);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, {rhsPtr, preg});
+
+        string rawDiff = createVariableTmp(PointerType);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, PointerType, {rawDiff, lhsPtr, rhsPtr});
+
+        string sizeTmp = createVariableTmp(IntType);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, {sizeTmp, to_string(elemSize)});
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::div, IntType, {ireg, rawDiff, sizeTmp});
+        return 0;
+    }
+
+    if ((lhsType == PointerType && rhsType == IntType)
+        || (lhsType == IntType && rhsType == PointerType && op == "+")) {
+        // Ptr - Int ou Ptr + Int ou Int + ptr (reflexive)  
+        // il faut ajouter/soustraire la taille de l'élément pointé
+        int idxInt = 1;
+        int idxPtr = 0;
+        if (lhsType == IntType) {
+            idxInt = 0;
+            idxPtr = 1;
+        }
+        Type baseType = IntType;
+        int depth = 1;
+        inferPointerInfo(ctx->expr(idxPtr), baseType, depth);
+        int elemSize = pointerElementSize(baseType, depth);
+
+        this->visit(ctx->expr(idxPtr));
+        string ptrTmp = createVariableTmp(PointerType);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, {ptrTmp, preg});
+
+        // On récupère le nombre de cases à retrancher (en fonction du type de pointeur donc)
+        string scaledTmp = emitScaledPointerOffset(ctx->expr(idxInt), elemSize);
+
+        if (op == "+") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, PointerType, {preg, ptrTmp, scaledTmp});
+        } else {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, PointerType, {preg, ptrTmp, scaledTmp});
+        }
+        return 0;
+    }
+
     Type resultType = (lhsType == DoubleType || rhsType == DoubleType) ? DoubleType : IntType;
 
     this->visit(ctx->expr(0));
@@ -849,6 +1139,33 @@ antlrcpp::Any IRGenVisitor::visitNegative(ifccParser::NegativeContext *ctx) {
     this->visit(ctx->expr());
     vector<string> v = {activeReg(exprType), activeReg(exprType)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::neg, exprType, v);
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitDeref(ifccParser::DerefContext *ctx) {
+    this->visit(ctx->expr());
+    ensureValueInReg(inferExprType(ctx->expr()), PointerType);
+
+    string ptrTmp = createVariableTmp(PointerType);
+    vector<string> savePtr = {ptrTmp, preg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, savePtr);
+
+    Type loadedType = inferExprType(ctx);
+    vector<string> load = {activeReg(loadedType), ptrTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rind, loadedType, load);
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitAddressOf(ifccParser::AddressOfContext *ctx) {
+    if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx->expr())) {
+        string irName = scopedName(v->VAR()->getText());
+        vector<string> addr = {preg, irName};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::addrof, PointerType, addr);
+        return 0;
+    }
+
+    // Fallback for forms like &*p : evaluate operand and reuse pointer value.
+    this->visit(ctx->expr());
     return 0;
 }
 
@@ -912,8 +1229,12 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
         if (functionParamTypes.count(funcName) && i < functionParamTypes[funcName].size()) {
             targetType = functionParamTypes[funcName][i];
         }
-
-        ensureValueInReg(argType, targetType);
+        if (targetType == PointerType && argType == IntType && isZeroLiteralExpr(args[i])) {
+            vector<string> z = {preg, "0"};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, PointerType, z);
+        } else {
+            ensureValueInReg(argType, targetType);
+        }
 
         string tempName = createVariableTmp(targetType);
         string reg = activeReg(targetType);
@@ -923,9 +1244,10 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     }
 
     // 2. Generate call instruction with the function name and the temp stack slots as arguments
-    vector<string> callArgs = {ireg, funcName};
+    Type retType = functionReturnType.count(funcName) ? functionReturnType[funcName] : IntType;
+    vector<string> callArgs = {activeReg(retType), funcName};
     callArgs.insert(callArgs.end(), argTempNames.begin(), argTempNames.end());
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, IntType, callArgs);
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, retType, callArgs);
     return 0;
 }
 
@@ -934,6 +1256,28 @@ antlrcpp::Any IRGenVisitor::visitRelational(ifccParser::RelationalContext *ctx){
 
     Type lhsType = inferExprType(ctx->expr(0));
     Type rhsType = inferExprType(ctx->expr(1));
+    if (lhsType == PointerType && rhsType == PointerType) {
+        // Comparaisons entre pointeurs
+        this->visit(ctx->expr(0));
+        string lhsTmp = createVariableTmp(PointerType);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, {lhsTmp, preg});
+
+        this->visit(ctx->expr(1));
+        string rhsTmp = createVariableTmp(PointerType);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, {rhsTmp, preg});
+
+        vector<string> cmpArgs = {ireg, lhsTmp, rhsTmp};
+        if (op == "<") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_lt, PointerType, cmpArgs);
+        } else if (op == "<=") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_le, PointerType, cmpArgs);
+        } else if (op == ">") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_gt, PointerType, cmpArgs);
+        } else if (op == ">=") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ge, PointerType, cmpArgs);
+        }
+        return 0;
+    }
     // Les comparaisons prennent un type de calcul (soit int soit double) 
     // et renvoient un int (0 ou 1)
     Type cmpType = (lhsType == DoubleType || rhsType == DoubleType) ? DoubleType : IntType;
@@ -988,6 +1332,36 @@ antlrcpp::Any IRGenVisitor::visitEquality(ifccParser::EqualityContext *ctx){
 
     Type lhsType = inferExprType(ctx->expr(0));
     Type rhsType = inferExprType(ctx->expr(1));
+    if (lhsType == PointerType || rhsType == PointerType) {
+        this->visit(ctx->expr(0));
+        string lhsTmp = createVariableTmp(PointerType);
+        if (lhsType == PointerType) {
+            vector<string> saveLhs = {lhsTmp, preg};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, saveLhs);
+        } else {
+            vector<string> z = {lhsTmp, "0"};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, PointerType, z);
+        }
+
+        this->visit(ctx->expr(1));
+        string rhsTmp = createVariableTmp(PointerType);
+        if (rhsType == PointerType) {
+            vector<string> saveRhs = {rhsTmp, preg};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, PointerType, saveRhs);
+        } else {
+            vector<string> z = {rhsTmp, "0"};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, PointerType, z);
+        }
+
+        vector<string> cmpArgs = {ireg, lhsTmp, rhsTmp};
+        if (op == "==") {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_eq, PointerType, cmpArgs);
+        } else {
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::cmp_ne, PointerType, cmpArgs);
+        }
+        return 0;
+    }
+
     // Les comparaisons prennent un type de calcul (int/double) et retournent booleen
     Type cmpType = (lhsType == DoubleType || rhsType == DoubleType) ? DoubleType : IntType;
 

@@ -56,16 +56,19 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
 
     o << "    movl $0, -8(%rbp)\n";
 
-    const char* intArgRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    const char* gpArgRegs32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    const char* gpArgRegs64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
     const char* dblArgRegs[] = {"%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5"};
-    int intIdx = 0, dblIdx = 0;
+    int gpIdx = 0, dblIdx = 0;
     for (size_t i = 0; i < this->paramNames.size() && i < 6; i++) {
         int idx = this->get_var_index_x86(this->paramNames[i]);
         Type paramType = this->get_var_type(this->paramNames[i]);
         if (paramType == DoubleType) {
             o << "    movsd " << dblArgRegs[dblIdx++] << ", " << idx << "(%rbp)\n";
+        } else if (paramType == PointerType) {
+            o << "    movq " << gpArgRegs64[gpIdx++] << ", " << idx << "(%rbp)\n";
         } else {
-            o << "    movl " << intArgRegs[intIdx++] << ", " << idx << "(%rbp)\n";
+            o << "    movl " << gpArgRegs32[gpIdx++] << ", " << idx << "(%rbp)\n";
         }
     }
 }
@@ -127,15 +130,19 @@ void IRInstr::gen_x86(ostream &o) {
                 o << "    movabsq $" << imm << ", %rax\n";
                 o << "    movq %rax, %xmm0\n";
                 if (nameVar1 != "!freg") {
-                    this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
                     index1 = this->bb->cfg->get_var_index_x86(nameVar1);
                     o << "    movsd %xmm0, " << index1 << "(%rbp)\n";
+                }
+            } else if (this->t == PointerType) {
+                o << "    movabsq $" << this->params.at(1) << ", %rax\n";
+                if (nameVar1 != "!preg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movq %rax, " << index1 << "(%rbp)\n";
                 }
             } else {
                 int nb = stoi(this->params.at(1));
                 o << "    movl $" << nb << ", %eax\n";
                 if (nameVar1 != "!reg") {
-                    this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
                     index1 = this->bb->cfg->get_var_index_x86(nameVar1);
                     o << "    movl %eax, " << index1 << "(%rbp)\n";
                 }
@@ -167,6 +174,31 @@ void IRInstr::gen_x86(ostream &o) {
                 index2 = this->bb->cfg->get_var_index_x86(nameVar2);
                 o << "    movsd " << index2 << "(%rbp), %xmm0\n";
                 o << "    movsd %xmm0, " << index1 << "(%rbp)\n";
+                break;
+            }
+
+            if (this->t == PointerType) {
+                bool destIsReg = (nameVar1 == "!preg");
+                bool srcIsReg = (nameVar2 == "!preg");
+
+                if (destIsReg && srcIsReg) {
+                    break;
+                }
+                if (destIsReg) {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                    break;
+                }
+                if (srcIsReg) {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movq %rax, " << index1 << "(%rbp)\n";
+                    break;
+                }
+
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movq " << index2 << "(%rbp), %rax\n";
+                o << "    movq %rax, " << index1 << "(%rbp)\n";
                 break;
             }
 
@@ -246,6 +278,28 @@ void IRInstr::gen_x86(ostream &o) {
                     index1 = this->bb->cfg->get_var_index_x86(nameVar1);
                     o << "    movsd %xmm0, " << index1 << "(%rbp)\n";
                 }
+            } else if (this->t == PointerType) {
+                if (nameVar3 == "!preg") {
+                    o << "    movq %rax, %rcx\n";
+                } else {
+                    Type rhsType = this->bb->cfg->get_var_type(nameVar3);
+                    index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                    if (rhsType == IntType) {
+                        o << "    movslq " << index3 << "(%rbp), %rcx\n";
+                    } else {
+                        o << "    movq " << index3 << "(%rbp), %rcx\n";
+                    }
+                }
+
+                if (nameVar2 != "!preg") {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                }
+                o << "    addq %rcx, %rax\n";
+                if (nameVar1 != "!preg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movq %rax, " << index1 << "(%rbp)\n";
+                }
             } else {
                 if (nameVar3 != "!reg") {
                     index3 = this->bb->cfg->get_var_index_x86(nameVar3);
@@ -311,6 +365,29 @@ void IRInstr::gen_x86(ostream &o) {
                 if (nameVar1 != "!freg") {
                     index1 = this->bb->cfg->get_var_index_x86(nameVar1);
                     o << "    movsd %xmm0, " << index1 << "(%rbp)\n";
+                }
+            } else if (this->t == PointerType) {
+                if (nameVar3 == "!preg") {
+                    o << "    movq %rax, %rcx\n";
+                } else {
+                    Type rhsType = this->bb->cfg->get_var_type(nameVar3);
+                    index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                    if (rhsType == IntType) {
+                        o << "    movslq " << index3 << "(%rbp), %rcx\n";
+                    } else {
+                        o << "    movq " << index3 << "(%rbp), %rcx\n";
+                    }
+                }
+
+                if (nameVar2 != "!preg") {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                }
+
+                o << "    subq %rcx, %rax\n";
+                if (nameVar1 != "!preg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movq %rax, " << index1 << "(%rbp)\n";
                 }
             } else {
                 if (nameVar3 == "!reg") {
@@ -541,6 +618,19 @@ void IRInstr::gen_x86(ostream &o) {
                     o << "    movsd " << index2 << "(%rbp), %xmm0\n";
                 }
                 o << "    ucomisd " << operandeMemory << ", %xmm0\n";
+            } else if (this->t == PointerType) {
+                if (nameVar3 == "!preg") {
+                    o << "    movq %rax, %rcx\n";
+                    operandeMemory = "%rcx";
+                } else {
+                    index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                    operandeMemory = to_string(index3) + "(%rbp)";
+                }
+                if (nameVar2 != "!preg") {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                }
+                o << "    cmpq " << operandeMemory << ", %rax\n";
             } else {
                 if (nameVar3 == "!reg") {
                     o << "    movl %eax, %ecx\n";
@@ -583,6 +673,19 @@ void IRInstr::gen_x86(ostream &o) {
                     o << "    movsd " << index2 << "(%rbp), %xmm0\n";
                 }
                 o << "    ucomisd " << operandeMemory << ", %xmm0\n";
+            } else if (this->t == PointerType) {
+                if (nameVar3 == "!preg") {
+                    o << "    movq %rax, %rcx\n";
+                    operandeMemory = "%rcx";
+                } else {
+                    index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                    operandeMemory = to_string(index3) + "(%rbp)";
+                }
+                if (nameVar2 != "!preg") {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                }
+                o << "    cmpq " << operandeMemory << ", %rax\n";
             } else {
                 if (nameVar3 == "!reg") {
                     o << "    movl %eax, %ecx\n";
@@ -624,6 +727,20 @@ void IRInstr::gen_x86(ostream &o) {
                 }
                 o << "    ucomisd " << operandeMemory << ", %xmm0\n";
                 // Attention il faut utiliser setb et pas setl car comparaisons sur des floattants
+                o << "    setb %al\n";
+            } else if (this->t == PointerType) {
+                if (nameVar3 == "!preg") {
+                    o << "    movq %rax, %rcx\n";
+                    operandeMemory = "%rcx";
+                } else {
+                    index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                    operandeMemory = to_string(index3) + "(%rbp)";
+                }
+                if (nameVar2 != "!preg") {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                }
+                o << "    cmpq " << operandeMemory << ", %rax\n";
                 o << "    setb %al\n";
             } else {
                 if (nameVar3 == "!reg") {
@@ -667,6 +784,20 @@ void IRInstr::gen_x86(ostream &o) {
                 o << "    ucomisd " << operandeMemory << ", %xmm0\n";
                 // Attention il faut utiliser setbe et pas setle car comparaisons sur des floattants
                 o << "    setbe %al\n";
+            } else if (this->t == PointerType) {
+                if (nameVar3 == "!preg") {
+                    o << "    movq %rax, %rcx\n";
+                    operandeMemory = "%rcx";
+                } else {
+                    index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                    operandeMemory = to_string(index3) + "(%rbp)";
+                }
+                if (nameVar2 != "!preg") {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                }
+                o << "    cmpq " << operandeMemory << ", %rax\n";
+                o << "    setbe %al\n";
             } else {
                 if (nameVar3 == "!reg") {
                     o << "    movl %eax, %ecx\n";
@@ -708,6 +839,20 @@ void IRInstr::gen_x86(ostream &o) {
                 }
                 o << "    ucomisd " << operandeMemory << ", %xmm0\n";
                 // Attention il faut utiliser seta et pas setg car comparaisons sur des floattants
+                o << "    seta %al\n";
+            } else if (this->t == PointerType) {
+                if (nameVar3 == "!preg") {
+                    o << "    movq %rax, %rcx\n";
+                    operandeMemory = "%rcx";
+                } else {
+                    index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                    operandeMemory = to_string(index3) + "(%rbp)";
+                }
+                if (nameVar2 != "!preg") {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                }
+                o << "    cmpq " << operandeMemory << ", %rax\n";
                 o << "    seta %al\n";
             } else {
                 if (nameVar3 == "!reg") {
@@ -751,6 +896,20 @@ void IRInstr::gen_x86(ostream &o) {
                 o << "    ucomisd " << operandeMemory << ", %xmm0\n";
                 // Attention il faut utiliser setae et pas setge car comparaisons sur des floattants
                 o << "    setae %al\n";
+            } else if (this->t == PointerType) {
+                if (nameVar3 == "!preg") {
+                    o << "    movq %rax, %rcx\n";
+                    operandeMemory = "%rcx";
+                } else {
+                    index3 = this->bb->cfg->get_var_index_x86(nameVar3);
+                    operandeMemory = to_string(index3) + "(%rbp)";
+                }
+                if (nameVar2 != "!preg") {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %rax\n";
+                }
+                o << "    cmpq " << operandeMemory << ", %rax\n";
+                o << "    setae %al\n";
             } else {
                 if (nameVar3 == "!reg") {
                     o << "    movl %eax, %ecx\n";
@@ -776,17 +935,20 @@ void IRInstr::gen_x86(ostream &o) {
         case IRInstr::call: {
             string dest = this->params.at(0);
             string funcName = this->params.at(1);
-            const char* intArgRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+            const char* gpArgRegs32[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+            const char* gpArgRegs64[] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
             const char* dblArgRegs[] = {"%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5"};
-            int intIdx = 0, dblIdx = 0;
+            int gpIdx = 0, dblIdx = 0;
 
             for (size_t i = 2; i < this->params.size(); i++) {
                 Type argT = this->bb->cfg->get_var_type(this->params.at(i));
                 int argIndex = this->bb->cfg->get_var_index_x86(this->params.at(i));
                 if (argT == DoubleType) {
                     o << "    movsd " << argIndex << "(%rbp), " << dblArgRegs[dblIdx++] << "\n";
+                } else if (argT == PointerType) {
+                    o << "    movq " << argIndex << "(%rbp), " << gpArgRegs64[gpIdx++] << "\n";
                 } else {
-                    o << "    movl " << argIndex << "(%rbp), " << intArgRegs[intIdx++] << "\n";
+                    o << "    movl " << argIndex << "(%rbp), " << gpArgRegs32[gpIdx++] << "\n";
                 }
             }
 
@@ -797,19 +959,110 @@ void IRInstr::gen_x86(ostream &o) {
                 o << "    call " << funcName << "@PLT\n";
             #endif
 
-            if (dest != "!reg") {
+            if (dest != "!reg" && dest != "!freg" && dest != "!preg") {
                 this->bb->cfg->add_to_symbol_table(dest, this->t);
                 int destIndex = this->bb->cfg->get_var_index_x86(dest);
-                o << "    movl %eax, " << destIndex << "(%rbp)\n";
+                if (this->t == DoubleType) {
+                    o << "    movsd %xmm0, " << destIndex << "(%rbp)\n";
+                } else if (this->t == PointerType) {
+                    o << "    movq %rax, " << destIndex << "(%rbp)\n";
+                } else {
+                    o << "    movl %eax, " << destIndex << "(%rbp)\n";
+                }
             }
             break;
         }
 
         case IRInstr::rtrn:
             nameVar1 = this->params.at(0);
-            if (nameVar1 != "!reg") {
+            if (nameVar1 != "!reg" && nameVar1 != "!freg" && nameVar1 != "!preg") {
                 index1 = this->bb->cfg->get_var_index_x86(nameVar1);
-                o << "    movl " << index1 << "(%rbp), %eax\n";
+                if (this->t == DoubleType) {
+                    o << "    movsd " << index1 << "(%rbp), %xmm0\n";
+                } else if (this->t == PointerType) {
+                    o << "    movq " << index1 << "(%rbp), %rax\n";
+                } else {
+                    o << "    movl " << index1 << "(%rbp), %eax\n";
+                }
+            }
+            break;
+
+        case IRInstr::addrof:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+            o << "    leaq " << index2 << "(%rbp), %rax\n";
+            if (nameVar1 != "!preg") {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movq %rax, " << index1 << "(%rbp)\n";
+            }
+            break;
+
+        case IRInstr::rind:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            if (nameVar2 == "!preg") {
+                o << "    movq %rax, %r11\n";
+            } else {
+                index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                o << "    movq " << index2 << "(%rbp), %r11\n";
+            }
+
+            if (this->t == DoubleType) {
+                o << "    movsd (%r11), %xmm0\n";
+                if (nameVar1 != "!freg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movsd %xmm0, " << index1 << "(%rbp)\n";
+                }
+            } else if (this->t == PointerType) {
+                o << "    movq (%r11), %rax\n";
+                if (nameVar1 != "!preg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movq %rax, " << index1 << "(%rbp)\n";
+                }
+            } else {
+                o << "    movl (%r11), %eax\n";
+                if (nameVar1 != "!reg") {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movl %eax, " << index1 << "(%rbp)\n";
+                }
+            }
+            break;
+
+        case IRInstr::wind:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+            if (nameVar1 == "!preg") {
+                o << "    movq %rax, %r11\n";
+            } else {
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movq " << index1 << "(%rbp), %r11\n";
+            }
+
+            if (this->t == DoubleType) {
+                if (nameVar2 == "!freg") {
+                    o << "    movapd %xmm0, %xmm2\n";
+                } else {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movsd " << index2 << "(%rbp), %xmm2\n";
+                }
+                o << "    movsd %xmm2, (%r11)\n";
+            } else if (this->t == PointerType) {
+                if (nameVar2 == "!preg") {
+                    o << "    movq %rax, %r10\n";
+                } else {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %r10\n";
+                }
+                o << "    movq %r10, (%r11)\n";
+            } else {
+                if (nameVar2 == "!reg") {
+                    o << "    movl %eax, %r10d\n";
+                } else {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movl " << index2 << "(%rbp), %r10d\n";
+                }
+                o << "    movl %r10d, (%r11)\n";
             }
             break;
 
@@ -831,6 +1084,18 @@ void IRInstr::gen_x86(ostream &o) {
                 o << "    movslq " << index1 << "(%rbp), %rax\n";
                 o << "    addq %rbp, %rax\n";
                 o << "    movsd %xmm2, (%rax)\n";
+            } else if (this->t == PointerType) {
+                if (nameVar2 == "!preg") {
+                    o << "    movq %rax, %r10\n";
+                } else {
+                    index2 = this->bb->cfg->get_var_index_x86(nameVar2);
+                    o << "    movq " << index2 << "(%rbp), %r10\n";
+                }
+
+                index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                o << "    movslq " << index1 << "(%rbp), %rax\n";
+                o << "    addq %rbp, %rax\n";
+                o << "    movq %r10, (%rax)\n";
             } else {
                 if (nameVar2 == "!reg") {
                     o << "    movl %eax, %r10d\n";
@@ -860,6 +1125,12 @@ void IRInstr::gen_x86(ostream &o) {
                 if (nameVar1 != "!freg") {
                     index1 = this->bb->cfg->get_var_index_x86(nameVar1);
                     o << "    movsd %xmm0, " << index1 << "(%rbp)\n";
+                }
+            } else if (this->t == PointerType) {
+                o << "    movq (%rax), %rax\n";
+                if (nameVar1 != "!preg")  {
+                    index1 = this->bb->cfg->get_var_index_x86(nameVar1);
+                    o << "    movq %rax, " << index1 << "(%rbp)\n";
                 }
             } else {
                 o << "    movl (%rax), %eax\n";

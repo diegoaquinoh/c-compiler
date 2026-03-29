@@ -13,7 +13,7 @@ void SymbolTableVisitor::exitScope() {
     varStack.resize(marker);
 }
 
-void SymbolTableVisitor::declareVar(const std::string &name, Type t, bool isArray, int arraySize) {
+void SymbolTableVisitor::declareVar(const std::string &name, Type t, bool isArray, int arraySize, Type pointeeType, int pointerDepth) {
     // Check for redeclaration within current scope only
     int scopeStart = scopeMarkers.back();
     for (int i = scopeStart; i < (int)varStack.size(); i++) {
@@ -24,7 +24,7 @@ void SymbolTableVisitor::declareVar(const std::string &name, Type t, bool isArra
         }
     }
 
-    varStack.push_back({name, t, isArray, arraySize});
+    varStack.push_back({name, t, isArray, arraySize, pointeeType, pointerDepth});
     // Also add to the flat symbol table for IRGenVisitor
     allSymbolTables[currentFunction][name] = t;
 }
@@ -48,6 +48,16 @@ Type SymbolTableVisitor::getVarType(const std::string &name) const {
     return var->type;
 }
 
+Type SymbolTableVisitor::getVarPointeeType(const std::string &name) const {
+    const VarInfo *var = lookupVar(name);
+    return var->pointeeType;
+}
+
+int SymbolTableVisitor::getVarPointerDepth(const std::string &name) const {
+    const VarInfo *var = lookupVar(name);
+    return var->pointerDepth;
+}
+
 bool SymbolTableVisitor::isVarArray(const std::string &name) const {
     const VarInfo *var = lookupVar(name);
     return var != nullptr && var->isArray;
@@ -63,9 +73,46 @@ const SymbolTableVisitor::VarInfo *SymbolTableVisitor::lookupVar(const string &n
 }
 
 bool SymbolTableVisitor::isLvalueExpr(ifccParser::ExprContext *ctx) const {
-    // Soit c'est une variable soit un arrayAccess (tab[])
-    return dynamic_cast<ifccParser::VarContext *>(ctx) != nullptr |
-        dynamic_cast<ifccParser::ArrayAccessContext *>(ctx) != nullptr;
+    // Soit c'est une variable soit un arrayAccess (tab[]), soit *ptr = ...
+    return dynamic_cast<ifccParser::VarContext *>(ctx) != nullptr ||
+        dynamic_cast<ifccParser::ArrayAccessContext *>(ctx) != nullptr ||
+        dynamic_cast<ifccParser::DerefContext *>(ctx) != nullptr;
+}
+
+Type SymbolTableVisitor::parseBaseType(const string &typeText) const {
+    if (typeText == "double") {
+        return DoubleType;
+    } 
+    if (typeText == "void") {
+        return VoidType;
+    } 
+    return IntType;
+}
+
+Type SymbolTableVisitor::parseDeclaredType(const string &typeText, ifccParser::Ptr_suffixContext *ptrSuffix, Type &outPointeeType, int &outPointerDepth) const {
+    outPointeeType = IntType;
+    outPointerDepth = 0;
+    Type baseType = parseBaseType(typeText);
+    string suffix = ptrSuffix ? ptrSuffix->getText() : "";
+    if (suffix.empty()) {
+        return baseType;
+    }
+
+    outPointerDepth = suffix.size();
+    outPointeeType = baseType;
+    return PointerType;
+}
+
+int SymbolTableVisitor::getPointedElementSize(const ExprTypeInfo &ptrType) const {
+    if (ptrType.pointerDepth > 1) return 8;
+    if (ptrType.pointeeType == DoubleType) return 8;
+    if (ptrType.pointeeType == VoidType) return 1;
+    return 4;
+}
+
+bool SymbolTableVisitor::isZeroLiteralExpr(ifccParser::ExprContext *ctx) const {
+    auto *c = dynamic_cast<ifccParser::ConstContext *>(ctx);
+    return c != nullptr && c->CONST() != nullptr && c->CONST()->getText() == "0";
 }
 
 /**
@@ -73,16 +120,17 @@ bool SymbolTableVisitor::isLvalueExpr(ifccParser::ExprContext *ctx) const {
  * Mais aussi de vérifier que l'expression respecte bien les conventions qu'on s'est posé
  * qu'il n'y a pas d'effet de bord et positionner errorFlag quand il le faut.
  */
-Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
+SymbolTableVisitor::ExprTypeInfo SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     if (ctx == nullptr) {
-        return IntType;
+        return {IntType, false, IntType, 0};
     }
 
     if (auto *c = dynamic_cast<ifccParser::ConstContext *>(ctx)) {
         if (c->DOUBLE_CONST()) {
-            return DoubleType;
+            return {DoubleType, false, DoubleType, 0};
         }
-        return IntType;
+        bool isZero = c->CONST() && c->CONST()->getText() == "0";
+        return {IntType, isZero, IntType, 0};
     }
 
     if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
@@ -92,25 +140,28 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
             cerr << "error: array '" << name << "' cannot be used as a scalar expression\n";
             errorFlag = true;
         }
-        return getVarType(name);
+        Type t = getVarType(name);
+        if (t == PointerType) {
+            return {PointerType, false, getVarPointeeType(name), getVarPointerDepth(name)};
+        }
+        return {t, false, t, 0};
     }
 
     if (auto *a = dynamic_cast<ifccParser::ArrayAccessContext *>(ctx)) {
         string name = a->VAR()->getText();
         useVar(name);
-        // L'accès [] est autorisé uniquement pour un tableau
         if (!isVarArray(name)) {
             cerr << "error: variable '" << name << "' is not an array\n";
             errorFlag = true;
         }
 
-        // L'indice doit être un entier 
-        Type idxType = inferExprType(a->expr());
-        if (idxType != IntType) {
+        ExprTypeInfo idxType = inferExprType(a->expr());
+        if (idxType.type != IntType || idxType.pointeeType != IntType) {
             cerr << "error: array index for '" << name << "' must be of type int\n";
             errorFlag = true;
         }
-        return getVarType(name);
+        Type elemType = getVarType(name);
+        return {elemType, false, elemType, 0};
     }
 
     if (auto *p = dynamic_cast<ifccParser::ParensContext *>(ctx)) {
@@ -118,122 +169,199 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     }
 
     if (auto *n = dynamic_cast<ifccParser::NegativeContext *>(ctx)) {
-        return inferExprType(n->expr());
+        ExprTypeInfo t = inferExprType(n->expr());
+        if (t.type == PointerType) {
+            cerr << "error: invalid use of unary '-' on pointer\n";
+            errorFlag = true;
+            return {IntType, false, IntType, 0};
+        }
+        return t;
     }
 
     if (auto *n = dynamic_cast<ifccParser::LogicalnotContext *>(ctx)) {
         inferExprType(n->expr());
-        return IntType;
+        return {IntType, false, IntType, 0};
+    }
+
+    if (auto *d = dynamic_cast<ifccParser::DerefContext *>(ctx)) {
+        ExprTypeInfo ptrInfo = inferExprType(d->expr());
+        if (ptrInfo.type != PointerType) {
+            cerr << "error: cannot dereference non-pointer expression\n";
+            errorFlag = true;
+            return {IntType, false, IntType, 0};
+        }
+        if (ptrInfo.pointeeType == VoidType && ptrInfo.pointerDepth == 1) {
+            cerr << "error: cannot dereference void pointer\n";
+            errorFlag = true;
+            return {IntType, false, IntType, 0};
+        }
+        if (ptrInfo.pointerDepth > 1) {
+            return {PointerType, false, ptrInfo.pointeeType, ptrInfo.pointerDepth - 1};
+        }
+        return {ptrInfo.pointeeType, false, ptrInfo.pointeeType, 0};
+    }
+
+    if (auto *a = dynamic_cast<ifccParser::AddressOfContext *>(ctx)) {
+        if (!isLvalueExpr(a->expr())) {
+            cerr << "error: lvalue required as unary '&' operand\n";
+            errorFlag = true;
+            return {PointerType, false, IntType, 1};
+        }
+        ExprTypeInfo base = inferExprType(a->expr());
+        if (base.type == PointerType) {
+            return {PointerType, false, base.pointeeType, base.pointerDepth + 1};
+        }
+        return {PointerType, false, base.type, 1};
     }
 
     if (auto *m = dynamic_cast<ifccParser::MultdivContext *>(ctx)) {
-        // Regle arithmetique : int op double => double, sauf modulo
-        Type lhs = inferExprType(m->expr(0));
-        Type rhs = inferExprType(m->expr(1));
-        if (lhs == VoidType || rhs == VoidType) {
-            cerr << "error: void value not ignored as it ought to be\n";
+        ExprTypeInfo lhs = inferExprType(m->expr(0));
+        ExprTypeInfo rhs = inferExprType(m->expr(1));
+        if (lhs.type == VoidType || rhs.type == VoidType || lhs.type == PointerType || rhs.type == PointerType) {
+            cerr << "error: invalid operands to binary operator '" << m->OP->getText() << "'\n";
             errorFlag = true;
-            return IntType;
+            return {IntType, false, IntType, 0};
         }
         string op = m->OP->getText();
-        if (op == "%" && (lhs == DoubleType || rhs == DoubleType)) {
+        if (op == "%" && (lhs.type == DoubleType || rhs.type == DoubleType)) {
             cerr << "error: operator '%' only supports int operands\n";
             errorFlag = true;
         }
-        return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
+        Type rt = (lhs.type == DoubleType || rhs.type == DoubleType) ? DoubleType : IntType;
+        return {rt, false, rt, 0};
     }
 
     if (auto *a = dynamic_cast<ifccParser::AddsubContext *>(ctx)) {
-        // Meme regle de pour + et -
-        Type lhs = inferExprType(a->expr(0));
-        Type rhs = inferExprType(a->expr(1));
-        if (lhs == VoidType || rhs == VoidType) {
+        ExprTypeInfo lhs = inferExprType(a->expr(0));
+        ExprTypeInfo rhs = inferExprType(a->expr(1));
+        if (lhs.type == VoidType || rhs.type == VoidType) {
             cerr << "error: void value not ignored as it ought to be\n";
             errorFlag = true;
-            return IntType;
+            return {IntType, false, IntType, 0};
         }
-        return (lhs == DoubleType || rhs == DoubleType) ? DoubleType : IntType;
+        string op = a->OP->getText();
+        if (lhs.type == PointerType && rhs.type == PointerType) {
+            // On a pas le droit de faire ptr + ptr, seulement ptr - ptr
+            if (op == "-") {
+                bool samePtr = lhs.pointerDepth == rhs.pointerDepth && lhs.pointeeType == rhs.pointeeType;
+                bool voidCompat = lhs.pointerDepth == 1 && rhs.pointerDepth == 1 &&
+                                  (lhs.pointeeType == VoidType || rhs.pointeeType == VoidType);
+                if (!(samePtr || voidCompat)) {
+                    cerr << "error: invalid subtraction between incompatible pointer types\n";
+                    errorFlag = true;
+                }
+                return {IntType, false, IntType, 0};
+            }
+            cerr << "error: invalid operands to binary operator '+'\n";
+            errorFlag = true;
+            return {IntType, false, IntType, 0};
+        }
+        if (lhs.type == PointerType && rhs.type == IntType) {
+            // On peut faire + ou - peu importe
+            if (lhs.pointeeType == VoidType && lhs.pointerDepth == 1) {
+                cerr << "error: pointer arithmetic on void* is not supported\n";
+                errorFlag = true;
+            }
+
+            return lhs;
+        }
+        if (lhs.type == IntType && rhs.type == PointerType) {
+            // + uniquement
+            if (op == "+") {
+                return rhs;
+            }
+            cerr << "error: invalid operands to binary operator '-'\n";
+            errorFlag = true;
+            return {IntType, false, IntType, 0};
+        }
+        // Les cas int et double : promotion
+        Type rt = (lhs.type == DoubleType || rhs.type == DoubleType) ? DoubleType : IntType;
+        return {rt, false, rt, 0};
     }
 
     if (auto *r = dynamic_cast<ifccParser::RelationalContext *>(ctx)) {
-        // Les comparaisons produisent toujours un entier (bool 0 ou 1)
-        Type lhs = inferExprType(r->expr(0));
-        Type rhs = inferExprType(r->expr(1));
-        if (lhs == VoidType || rhs == VoidType) {
+        ExprTypeInfo lhs = inferExprType(r->expr(0));
+        ExprTypeInfo rhs = inferExprType(r->expr(1));
+        if (lhs.type == VoidType || rhs.type == VoidType) {
             cerr << "error: void value not ignored as it ought to be\n";
             errorFlag = true;
         }
-        return IntType;
+        if (lhs.type == PointerType && rhs.type == PointerType) {
+            // Uniquement autorisé pour les mêmes types de pointeur, ie même profondeur et même type
+            if (lhs.pointerDepth != rhs.pointerDepth || lhs.pointeeType != rhs.pointeeType) {
+                cerr << "error: invalid comparison between incompatible pointer types\n";
+                errorFlag = true;
+            }
+        } else if (lhs.type == PointerType || rhs.type == PointerType) {
+            cerr << "error: invalid comparison between pointer and non-pointer\n";
+            errorFlag = true;
+        }
+        return {IntType, false, IntType, 0};
     }
 
     if (auto *e = dynamic_cast<ifccParser::EqualityContext *>(ctx)) {
-        // Les comparaisons produisent toujours un booleen entier (0 ou 1)
-        Type lhs = inferExprType(e->expr(0));
-        Type rhs = inferExprType(e->expr(1));
-        if (lhs == VoidType || rhs == VoidType) {
+        ExprTypeInfo lhs = inferExprType(e->expr(0));
+        ExprTypeInfo rhs = inferExprType(e->expr(1));
+        if (lhs.type == VoidType || rhs.type == VoidType) {
             cerr << "error: void value not ignored as it ought to be\n";
             errorFlag = true;
         }
-        return IntType;
+        if (lhs.type == PointerType || rhs.type == PointerType) {
+            // Ici on autorise avec : les mêmes types de pointeur, 
+            // les pointeurs génériques (void*) et pointeurs nuls (0)
+            bool nullMix = (lhs.type == PointerType && rhs.type == IntType && rhs.isZeroLiteral) ||
+                           (rhs.type == PointerType && lhs.type == IntType && lhs.isZeroLiteral);
+            bool samePtr = lhs.type == PointerType && rhs.type == PointerType &&
+                           lhs.pointerDepth == rhs.pointerDepth && lhs.pointeeType == rhs.pointeeType;
+            bool voidCompat = lhs.type == PointerType && rhs.type == PointerType &&
+                              lhs.pointerDepth == 1 && rhs.pointerDepth == 1 &&
+                              (lhs.pointeeType == VoidType || rhs.pointeeType == VoidType);
+            if (!(nullMix || samePtr || voidCompat)) {
+                cerr << "error: invalid comparison between pointer and non-pointer\n";
+                errorFlag = true;
+            }
+        }
+        return {IntType, false, IntType, 0};
     }
 
     if (auto *b = dynamic_cast<ifccParser::BitwiseandContext *>(ctx)) {
-        // Les operateurs bitwise sont reserves aux operandes entiers
-        Type lhs = inferExprType(b->expr(0));
-        Type rhs = inferExprType(b->expr(1));
-        if (lhs == VoidType || rhs == VoidType) {
-            cerr << "error: void value not ignored as it ought to be\n";
-            errorFlag = true;
-            return IntType;
-        }
-        if (lhs != IntType || rhs != IntType) {
+        ExprTypeInfo lhs = inferExprType(b->expr(0));
+        ExprTypeInfo rhs = inferExprType(b->expr(1));
+        if (lhs.type != IntType || rhs.type != IntType) {
             cerr << "error: bitwise '&' only supports int operands\n";
             errorFlag = true;
         }
-        return IntType;
+        return {IntType, false, IntType, 0};
     }
 
     if (auto *b = dynamic_cast<ifccParser::BitwisexorContext *>(ctx)) {
-        // Les operateurs bitwise sont reserves aux operandes entiers
-        Type lhs = inferExprType(b->expr(0));
-        Type rhs = inferExprType(b->expr(1));
-        if (lhs == VoidType || rhs == VoidType) {
-            cerr << "error: void value not ignored as it ought to be\n";
-            errorFlag = true;
-            return IntType;
-        }
-        if (lhs != IntType || rhs != IntType) {
+        ExprTypeInfo lhs = inferExprType(b->expr(0));
+        ExprTypeInfo rhs = inferExprType(b->expr(1));
+        if (lhs.type != IntType || rhs.type != IntType) {
             cerr << "error: bitwise '^' only supports int operands\n";
             errorFlag = true;
         }
-        return IntType;
+        return {IntType, false, IntType, 0};
     }
 
     if (auto *b = dynamic_cast<ifccParser::BitwiseorContext *>(ctx)) {
-        // Les operateurs bitwise sont reserves aux operandes entiers
-        Type lhs = inferExprType(b->expr(0));
-        Type rhs = inferExprType(b->expr(1));
-        if (lhs == VoidType || rhs == VoidType) {
-            cerr << "error: void value not ignored as it ought to be\n";
-            errorFlag = true;
-            return IntType;
-        }
-        if (lhs != IntType || rhs != IntType) {
+        ExprTypeInfo lhs = inferExprType(b->expr(0));
+        ExprTypeInfo rhs = inferExprType(b->expr(1));
+        if (lhs.type != IntType || rhs.type != IntType) {
             cerr << "error: bitwise '|' only supports int operands\n";
             errorFlag = true;
         }
-        return IntType;
+        return {IntType, false, IntType, 0};
     }
 
     if (auto *a = dynamic_cast<ifccParser::AffectStmtContext *>(ctx)) {
-        // Avec la regle expr '=' expr, la validation de la lvalue se fait ici
         if (!isLvalueExpr(a->expr(0))) {
             cerr << "error: left-hand side of assignment is not an lvalue\n";
             errorFlag = true;
         }
 
-        Type lhsType = inferExprType(a->expr(0));
-        Type rhsType = inferExprType(a->expr(1));
+        ExprTypeInfo lhsType = inferExprType(a->expr(0));
+        ExprTypeInfo rhsType = inferExprType(a->expr(1));
 
         if (dynamic_cast<ifccParser::VarContext *>(a->expr(0)) != nullptr) {
             auto *lhsVar = static_cast<ifccParser::VarContext *>(a->expr(0));
@@ -244,8 +372,24 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
             }
         }
 
-        if (rhsType == DoubleType && lhsType == IntType) {
-            // Allowed by existing semantics (implicit narrowing in current project rules).
+        if (lhsType.type == PointerType) {
+            // le ptr de droite est du même type que la lvalue
+            bool samePtr = rhsType.type == PointerType && rhsType.pointeeType == lhsType.pointeeType && rhsType.pointerDepth == lhsType.pointerDepth;
+            // pointeur générique (void*)
+            bool voidCompat = rhsType.type == PointerType && rhsType.pointerDepth == 1 && lhsType.pointerDepth == 1 &&
+                              (rhsType.pointeeType == VoidType || lhsType.pointeeType == VoidType);
+            // pointeur null (0)
+            bool ptrNull = (rhsType.type == IntType && rhsType.isZeroLiteral);
+            if (!(samePtr || voidCompat || ptrNull)) {
+                cerr << "error: incompatible assignment to pointer\n";
+                errorFlag = true;
+            }
+            return lhsType;
+        }
+
+        if (rhsType.type == PointerType) {
+            cerr << "error: incompatible assignment from pointer to non-pointer\n";
+            errorFlag = true;
         }
 
         return lhsType;
@@ -268,50 +412,72 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
         }
         auto argExprs = f->expr();
         for (size_t i = 0; i < argExprs.size(); i++) {
-            Type argType = inferExprType(argExprs[i]);
+            ExprTypeInfo argType = inferExprType(argExprs[i]);
 
             if (functionParamTypes.count(funcName) && i < functionParamTypes[funcName].size()) {
                 Type paramType = functionParamTypes[funcName][i];
-                if (argType == DoubleType && paramType == IntType) {
+                if (argType.type == DoubleType && paramType == IntType) {
                     cerr << "warning: implicit conversion from 'double' to 'int' in argument "
                          << (i + 1) << " of call to '" << funcName << "'\n";
+                }
+                if (paramType == PointerType) {
+                    bool samePtr = (argType.type == PointerType &&
+                                    argType.pointeeType == functionParamPointeeTypes[funcName][i] &&
+                                    argType.pointerDepth == functionParamPointerDepths[funcName][i]);
+                    bool voidCompat = (argType.type == PointerType &&
+                                       argType.pointerDepth == 1 && functionParamPointerDepths[funcName][i] == 1 &&
+                                       (argType.pointeeType == VoidType || functionParamPointeeTypes[funcName][i] == VoidType));
+                    bool ok = samePtr || voidCompat ||
+                              (argType.type == IntType && argType.isZeroLiteral);
+                    if (!ok) {
+                        cerr << "error: incompatible pointer argument " << (i + 1) << " for call to '" << funcName << "'\n";
+                        errorFlag = true;
+                    }
                 }
             }
         }
         if (functionReturnType.count(funcName)) {
-            return functionReturnType[funcName];
+            Type retType = functionReturnType[funcName];
+            Type retPointee = functionReturnPointeeType.count(funcName) ? functionReturnPointeeType[funcName] : IntType;
+            int retDepth = functionReturnPointerDepth.count(funcName) ? functionReturnPointerDepth[funcName] : 0;
+            return {retType, false, retPointee, retDepth};
         }
-        return IntType;
+        return {IntType, false, IntType, 0};
     }
 
-    return IntType;
+    return {IntType, false, IntType, 0};
 }
 // --- Signature parsing helper ---
 
 SymbolTableVisitor::FuncSignature SymbolTableVisitor::parseSignature(
-        antlr4::tree::TerminalNode *typeNode, antlr4::tree::TerminalNode *varNode,
+    antlr4::tree::TerminalNode *typeNode, ifccParser::Ptr_suffixContext *returnPtrSuffix, antlr4::tree::TerminalNode *varNode,
         ifccParser::Param_listContext *paramList) {
     FuncSignature sig;
     sig.name = varNode->getText();
 
     string retTypeStr = typeNode->getText();
-    if (retTypeStr == "double") sig.returnType = DoubleType;
-    else if (retTypeStr == "void") sig.returnType = VoidType;
-    else sig.returnType = IntType;
+    sig.returnType = parseDeclaredType(retTypeStr, returnPtrSuffix, sig.returnPointeeType, sig.returnPointerDepth);
 
     sig.paramCount = 0;
     if (paramList) {
         auto types = paramList->TYPE();
+        auto ptrSuffixes = paramList->ptr_suffix();
         sig.paramCount = types.size();
         for (size_t i = 0; i < types.size(); i++) {
-            if (types[i]->getText() == "void") {
+            if (types[i]->getText() == "void" && (i >= ptrSuffixes.size() || ptrSuffixes[i]->getText().empty())) {
                 cerr << "error: parameter has incomplete type 'void'\n";
                 errorFlag = true;
                 sig.paramTypes.push_back(IntType);
+                sig.paramPointeeTypes.push_back(IntType);
+                sig.paramPointerDepths.push_back(0);
                 continue;
             }
-            Type pt = (types[i]->getText() == "double") ? DoubleType : IntType;
+            Type pointee = IntType;
+            int pdepth = 0;
+            Type pt = parseDeclaredType(types[i]->getText(), i < ptrSuffixes.size() ? ptrSuffixes[i] : nullptr, pointee, pdepth);
             sig.paramTypes.push_back(pt);
+            sig.paramPointeeTypes.push_back(pointee);
+            sig.paramPointerDepths.push_back(pdepth);
         }
     }
     return sig;
@@ -335,7 +501,7 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
 }
 
 antlrcpp::Any SymbolTableVisitor::visitFunc(ifccParser::FuncContext *ctx) {
-    FuncSignature sig = parseSignature(ctx->TYPE(), ctx->VAR(), ctx->param_list());
+    FuncSignature sig = parseSignature(ctx->TYPE(), ctx->ptr_suffix(), ctx->VAR(), ctx->param_list());
     string funcName = sig.name;
     bool isPrototype = (ctx->block() == nullptr);
 
@@ -343,8 +509,12 @@ antlrcpp::Any SymbolTableVisitor::visitFunc(ifccParser::FuncContext *ctx) {
         if (knownFunctions.count(funcName)) {
             bool conflict = false;
             if (functionReturnType[funcName] != sig.returnType) conflict = true;
+            if (functionReturnPointeeType[funcName] != sig.returnPointeeType) conflict = true;
+            if (functionReturnPointerDepth[funcName] != sig.returnPointerDepth) conflict = true;
             if (functionArgCount[funcName] != sig.paramCount) conflict = true;
             if (!conflict && functionParamTypes[funcName] != sig.paramTypes) conflict = true;
+            if (!conflict && functionParamPointeeTypes[funcName] != sig.paramPointeeTypes) conflict = true;
+            if (!conflict && functionParamPointerDepths[funcName] != sig.paramPointerDepths) conflict = true;
 
             if (conflict) {
                 cerr << "error: conflicting declaration for function '" << funcName << "'\n";
@@ -355,8 +525,12 @@ antlrcpp::Any SymbolTableVisitor::visitFunc(ifccParser::FuncContext *ctx) {
 
         knownFunctions.insert(funcName);
         functionReturnType[funcName] = sig.returnType;
+        functionReturnPointeeType[funcName] = sig.returnPointeeType;
+        functionReturnPointerDepth[funcName] = sig.returnPointerDepth;
         functionArgCount[funcName] = sig.paramCount;
         functionParamTypes[funcName] = sig.paramTypes;
+        functionParamPointeeTypes[funcName] = sig.paramPointeeTypes;
+        functionParamPointerDepths[funcName] = sig.paramPointerDepths;
         return 0;
     }
 
@@ -366,8 +540,12 @@ antlrcpp::Any SymbolTableVisitor::visitFunc(ifccParser::FuncContext *ctx) {
     } else if (knownFunctions.count(funcName)) {
         bool conflict = false;
         if (functionReturnType[funcName] != sig.returnType) conflict = true;
+        if (functionReturnPointeeType[funcName] != sig.returnPointeeType) conflict = true;
+        if (functionReturnPointerDepth[funcName] != sig.returnPointerDepth) conflict = true;
         if (functionArgCount[funcName] != sig.paramCount) conflict = true;
         if (!conflict && functionParamTypes[funcName] != sig.paramTypes) conflict = true;
+        if (!conflict && functionParamPointeeTypes[funcName] != sig.paramPointeeTypes) conflict = true;
+        if (!conflict && functionParamPointerDepths[funcName] != sig.paramPointerDepths) conflict = true;
 
         if (conflict) {
             cerr << "error: conflicting types for function '" << funcName << "'\n";
@@ -376,7 +554,11 @@ antlrcpp::Any SymbolTableVisitor::visitFunc(ifccParser::FuncContext *ctx) {
     }
 
     currentFunctionReturnType = sig.returnType;
+    currentFunctionReturnPointeeType = sig.returnPointeeType;
+    currentFunctionReturnPointerDepth = sig.returnPointerDepth;
     functionReturnType[funcName] = sig.returnType;
+    functionReturnPointeeType[funcName] = sig.returnPointeeType;
+    functionReturnPointerDepth[funcName] = sig.returnPointerDepth;
     knownFunctions.insert(funcName);
     definedFunctions.insert(funcName);
 
@@ -392,14 +574,18 @@ antlrcpp::Any SymbolTableVisitor::visitFunc(ifccParser::FuncContext *ctx) {
         auto params = paramList->VAR();
         functionArgCount[funcName] = params.size();
         functionParamTypes[funcName] = sig.paramTypes;
+        functionParamPointeeTypes[funcName] = sig.paramPointeeTypes;
+        functionParamPointerDepths[funcName] = sig.paramPointerDepths;
 
         enterScope();
         for (size_t i = 0; i < params.size(); i++) {
-            declareVar(params[i]->getText(), sig.paramTypes[i]);
+            declareVar(params[i]->getText(), sig.paramTypes[i], false, 0, sig.paramPointeeTypes[i], sig.paramPointerDepths[i]);
         }
     } else {
         functionArgCount[funcName] = 0;
         functionParamTypes[funcName] = {};
+        functionParamPointeeTypes[funcName] = {};
+        functionParamPointerDepths[funcName] = {};
         enterScope();
     }
 
@@ -427,13 +613,13 @@ antlrcpp::Any SymbolTableVisitor::visitBlock(ifccParser::BlockContext *ctx) {
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
-    if (ctx->TYPE()->getText() == "void") {
+    if (ctx->TYPE()->getText() == "void" && ctx->ptr_suffix()->getText().empty()) {
         cerr << "error: variable has incomplete type 'void'\n";
         errorFlag = true;
         return 0;
     }
     // On memorise le type de declaration pour tous les decl_item de l'instruction
-    currentDeclType = (ctx->TYPE()->getText() == "double") ? DoubleType : IntType;
+    currentDeclType = parseDeclaredType(ctx->TYPE()->getText(), ctx->ptr_suffix(), currentDeclPointeeType, currentDeclPointerDepth);
     for (auto *item : ctx->decl_item()) {
         this->visit(item);
     }
@@ -460,11 +646,11 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *c
         }
     }
 
-    declareVar(varName, currentDeclType, isArray, arraySize);
+    declareVar(varName, currentDeclType, isArray, arraySize, currentDeclPointeeType, currentDeclPointerDepth);
 
     if (ctx->expr()) {
-        Type exprType = inferExprType(ctx->expr());
-        if (exprType == VoidType) {
+        ExprTypeInfo exprType = inferExprType(ctx->expr());
+        if (exprType.type == VoidType) {
             cerr << "error: void value not ignored as it ought to be\n";
             errorFlag = true;
         }
@@ -474,8 +660,8 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *c
 
 antlrcpp::Any SymbolTableVisitor::visitSwitch_stmt(ifccParser::Switch_stmtContext *ctx) {
     // Semantique volontairement simple et proche de C : l'expression du switch doit etre int.
-    Type t = inferExprType(ctx->expr());
-    if (t != IntType) {
+    ExprTypeInfo t = inferExprType(ctx->expr());
+    if (t.type != IntType) {
         cerr << "error: switch expression must be of type int\n";
         errorFlag = true;
     }
@@ -546,7 +732,27 @@ antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContex
         }
     } else {
         if (ctx->expr()) {
-            inferExprType(ctx->expr());
+            ExprTypeInfo ret = inferExprType(ctx->expr());
+            if (ret.type == VoidType) {
+                cerr << "error: void value not ignored as it ought to be\n";
+                errorFlag = true;
+            }
+            if (currentFunctionReturnType == PointerType) {
+                bool samePtr = (ret.type == PointerType &&
+                                ret.pointeeType == currentFunctionReturnPointeeType &&
+                                ret.pointerDepth == currentFunctionReturnPointerDepth);
+                bool voidCompat = (ret.type == PointerType && ret.pointerDepth == 1 && currentFunctionReturnPointerDepth == 1 &&
+                                   (ret.pointeeType == VoidType || currentFunctionReturnPointeeType == VoidType));
+                bool ok = samePtr || voidCompat ||
+                          (ret.type == IntType && ret.isZeroLiteral);
+                if (!ok) {
+                    cerr << "error: return type mismatch (expected pointer)\n";
+                    errorFlag = true;
+                }
+            } else if (ret.type == PointerType) {
+                cerr << "error: return type mismatch (cannot return pointer here)\n";
+                errorFlag = true;
+            }
         } else {
             cerr << "error: non-void function should return a value\n";
             errorFlag = true;
@@ -589,6 +795,18 @@ antlrcpp::Any SymbolTableVisitor::visitNegative(ifccParser::NegativeContext *ctx
 }
 
 antlrcpp::Any SymbolTableVisitor::visitLogicalnot(ifccParser::LogicalnotContext *ctx){
+    inferExprType(ctx);
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitDeref(ifccParser::DerefContext *ctx){
+    inferExprType(ctx);
+
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitAddressOf(ifccParser::AddressOfContext *ctx){
     inferExprType(ctx);
 
     return 0;

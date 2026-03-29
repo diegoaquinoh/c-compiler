@@ -3,6 +3,7 @@
 typedef enum {
 	IntType,
 	DoubleType,
-	VoidType
+	VoidType,
+	PointerType
 } Type;
 
