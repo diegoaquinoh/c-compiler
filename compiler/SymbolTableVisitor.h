@@ -19,9 +19,11 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         void exitScope();
 
         // Variable management
-        void declareVar(const std::string &name, Type t, bool isArray = false, int arraySize = 0);
+        void declareVar(const std::string &name, Type t, bool isArray = false, int arraySize = 0, Type pointeeType = IntType, int pointerDepth = 0);
         void useVar(const std::string &name);
         Type getVarType(const string &name) const;
+        Type getVarPointeeType(const string &name) const;
+        int getVarPointerDepth(const string &name) const;
         bool isVarArray(const string &name) const;
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;
@@ -50,6 +52,8 @@ class SymbolTableVisitor: public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitNegative(ifccParser::NegativeContext *ctx) override;
         virtual antlrcpp::Any visitLogicalnot(ifccParser::LogicalnotContext *ctx) override;
+        virtual antlrcpp::Any visitDeref(ifccParser::DerefContext *ctx) override;
+        virtual antlrcpp::Any visitAddressOf(ifccParser::AddressOfContext *ctx) override;
         virtual antlrcpp::Any visitParens(ifccParser::ParensContext *ctx) override;
 
         virtual antlrcpp::Any visitMultdiv(ifccParser::MultdivContext *ctx) override;
@@ -78,20 +82,39 @@ class SymbolTableVisitor: public ifccBaseVisitor {
             Type type;
             bool isArray;
             int arraySize;
+            Type pointeeType;
+            int pointerDepth;
+        };
+
+        struct ExprTypeInfo {
+            Type type;
+            bool isZeroLiteral;// Il faut savoir si un pointeur est nul (équivalent NULL) ou pas
+            Type pointeeType;
+            int pointerDepth;
         };
 
         const VarInfo *lookupVar(const string &name) const;
         bool isLvalueExpr(ifccParser::ExprContext *ctx) const;
+        Type parseBaseType(const string &typeText) const;
+        Type parseDeclaredType(const string &typeText, ifccParser::Ptr_suffixContext *ptrSuffix, Type &outPointeeType, int &outPointerDepth) const;
+        int getPointedElementSize(const ExprTypeInfo &ptrType) const;
+        bool isZeroLiteralExpr(ifccParser::ExprContext *ctx) const;
 
         struct FuncSignature {
             string name;
             Type returnType;
+            Type returnPointeeType;
+            int returnPointerDepth;
             int paramCount;
             vector<Type> paramTypes;
+            vector<Type> paramPointeeTypes;
+            vector<int> paramPointerDepths;
         };
-        FuncSignature parseSignature(antlr4::tree::TerminalNode *typeNode, antlr4::tree::TerminalNode *varNode, ifccParser::Param_listContext *paramList);
-        Type inferExprType(ifccParser::ExprContext *ctx);
+        FuncSignature parseSignature(antlr4::tree::TerminalNode *typeNode, ifccParser::Ptr_suffixContext *returnPtrSuffix, antlr4::tree::TerminalNode *varNode, ifccParser::Param_listContext *paramList);
+        ExprTypeInfo inferExprType(ifccParser::ExprContext *ctx);
         Type currentDeclType = IntType;
+        Type currentDeclPointeeType = IntType;
+        int currentDeclPointerDepth = 0;
         // Per-function scope stack
         vector<VarInfo> varStack;
         vector<int> scopeMarkers;              // marks where each scope begins in varStack
@@ -106,6 +129,12 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         set<string> knownFunctions = {"putchar", "getchar"};
         map<string, int> functionArgCount = {{"putchar", 1}, {"getchar", 0}};
         map<string, Type> functionReturnType = {{"putchar", IntType}, {"getchar", IntType}};
+        map<string, Type> functionReturnPointeeType = {{"putchar", IntType}, {"getchar", IntType}};
+        map<string, int> functionReturnPointerDepth = {{"putchar", 0}, {"getchar", 0}};
         map<string, vector<Type>> functionParamTypes = {{"putchar", {IntType}}, {"getchar", {}}};
+        map<string, vector<Type>> functionParamPointeeTypes = {{"putchar", {IntType}}, {"getchar", {}}};
+        map<string, vector<int>> functionParamPointerDepths = {{"putchar", {0}}, {"getchar", {}}};
         Type currentFunctionReturnType = IntType;
+        Type currentFunctionReturnPointeeType = IntType;
+        int currentFunctionReturnPointerDepth = 0;
 };
