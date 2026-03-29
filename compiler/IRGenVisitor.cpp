@@ -146,24 +146,37 @@ string IRGenVisitor::scopedName(const string &name) {
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
-    for (auto *func : ctx->func_def()) {
+    for (auto *func : ctx->func()) {
         this->visit(func);
     }
     return 0;
 }
 
-antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
+antlrcpp::Any IRGenVisitor::visitFunc(ifccParser::FuncContext *ctx)
 {
     string funcName = ctx->VAR()->getText();
 
-    // Parse and store return type
     string retTypeStr = ctx->TYPE()->getText();
     if (retTypeStr == "double") currentFunctionReturnType = DoubleType;
     else if (retTypeStr == "void") currentFunctionReturnType = VoidType;
     else currentFunctionReturnType = IntType;
     functionReturnType[funcName] = currentFunctionReturnType;
 
-    // Create a new CFG for this function
+    vector<Type> paramTypes;
+    if (ctx->param_list()) {
+        auto *paramList = ctx->param_list();
+        auto types = paramList->TYPE();
+        for (size_t i = 0; i < types.size(); i++) {
+            Type pt = (types[i]->getText() == "double") ? DoubleType : IntType;
+            paramTypes.push_back(pt);
+        }
+    }
+    if (ctx->block() == nullptr) {
+        functionParamTypes[funcName] = paramTypes;
+        return 0;
+    }
+
+    // Full function definition — create CFG and generate IR
     CFG* cfg = new CFG(&this->ir);
     cfg->functionName = funcName;
 
@@ -172,17 +185,22 @@ antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
     scopeCounter = 0;
     enterScope(); // function-level scope
 
-    // Register parameter names
+    // Register parameter names and types
     if (ctx->param_list()) {
         auto params = ctx->param_list()->VAR();
         auto types = ctx->param_list()->TYPE();
+        vector<Type> definitionParamTypes;
         for (size_t i = 0; i < params.size(); i++) {
             string paramName = params[i]->getText();
             string irName = declareScoped(paramName);
             cfg->paramNames.push_back(irName);
             Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
+            definitionParamTypes.push_back(paramType);
             cfg->add_to_symbol_table(irName, paramType);
         }
+        functionParamTypes[funcName] = definitionParamTypes;
+    } else {
+        functionParamTypes[funcName] = {};
     }
 
     // Set up basic blocks: prologue -> body -> epilogue
@@ -769,18 +787,24 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     string funcName = ctx->VAR()->getText();
     auto args = ctx->expr();
 
-    // 1. Evaluate each arg and save to temp stack slots
+    // 1. Evaluate each arg and convert to the expected parameter type
     vector<string> argTempNames;
-    for (auto *arg : args) {
-        Type argType = inferExprType(arg);
-        this->visit(arg);
+    for (size_t i = 0; i < args.size(); i++) {
+        Type argType = inferExprType(args[i]);
+        this->visit(args[i]);
 
-        // Pour l'instant avec notre ABI, on ne peut avoir que des paramètres en int
-        ensureValueInReg(argType, IntType);
+        // Determine target type from function signature
+        Type targetType = IntType;
+        if (functionParamTypes.count(funcName) && i < functionParamTypes[funcName].size()) {
+            targetType = functionParamTypes[funcName][i];
+        }
 
-        string tempName = createVariableTmp(IntType);
-        vector<string> copyArg = {tempName, ireg};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, copyArg);
+        ensureValueInReg(argType, targetType);
+
+        string tempName = createVariableTmp(targetType);
+        string reg = activeReg(targetType);
+        vector<string> copyArg = {tempName, reg};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, targetType, copyArg);
         argTempNames.push_back(tempName);
     }
 

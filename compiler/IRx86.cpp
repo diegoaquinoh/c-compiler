@@ -56,10 +56,17 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
 
     o << "    movl $0, -8(%rbp)\n";
 
-    const char* argRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    const char* intArgRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    const char* dblArgRegs[] = {"%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5"};
+    int intIdx = 0, dblIdx = 0;
     for (size_t i = 0; i < this->paramNames.size() && i < 6; i++) {
         int idx = this->get_var_index_x86(this->paramNames[i]);
-        o << "    movl " << argRegs[i] << ", " << idx << "(%rbp)\n";
+        Type paramType = this->get_var_type(this->paramNames[i]);
+        if (paramType == DoubleType) {
+            o << "    movsd " << dblArgRegs[dblIdx++] << ", " << idx << "(%rbp)\n";
+        } else {
+            o << "    movl " << intArgRegs[intIdx++] << ", " << idx << "(%rbp)\n";
+        }
     }
 }
 
@@ -769,11 +776,18 @@ void IRInstr::gen_x86(ostream &o) {
         case IRInstr::call: {
             string dest = this->params.at(0);
             string funcName = this->params.at(1);
-            const char* argRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+            const char* intArgRegs[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+            const char* dblArgRegs[] = {"%xmm0", "%xmm1", "%xmm2", "%xmm3", "%xmm4", "%xmm5"};
+            int intIdx = 0, dblIdx = 0;
 
             for (size_t i = 2; i < this->params.size(); i++) {
+                Type argT = this->bb->cfg->get_var_type(this->params.at(i));
                 int argIndex = this->bb->cfg->get_var_index_x86(this->params.at(i));
-                o << "    movl " << argIndex << "(%rbp), " << argRegs[i - 2] << "\n";
+                if (argT == DoubleType) {
+                    o << "    movsd " << argIndex << "(%rbp), " << dblArgRegs[dblIdx++] << "\n";
+                } else {
+                    o << "    movl " << argIndex << "(%rbp), " << intArgRegs[intIdx++] << "\n";
+                }
             }
 
             o << "    movl $0, %eax\n";
