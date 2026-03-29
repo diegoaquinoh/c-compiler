@@ -18,7 +18,7 @@ void IR::gen_arm(ostream &o) {
 // CFG // 
 
 int CFG::get_var_index_arm(string name){
-    return -1 * this->SymbolIndex.at(name);
+    return -4 * this->SymbolIndex.at(name);
 }
 
 void CFG::gen_arm_prologue(ostream &o){
@@ -50,9 +50,9 @@ void CFG::gen_arm_prologue(ostream &o){
         int idx = get_var_index_arm(paramNames[i]);
         Type paramType = get_var_type(paramNames[i]);
         if (paramType == DoubleType) {
-            o << "    str " << dblArgRegs[dblIdx++] << ", [sp, #" << idx << "]\n";
+            o << "    str " << dblArgRegs[dblIdx++] << ", [x29, #" << idx << "]\n";
         } else {
-            o << "    str " << intArgRegs[intIdx++] << ", [sp, #" << idx << "]\n";
+            o << "    str " << intArgRegs[intIdx++] << ", [x29, #" << idx << "]\n";
         }
     }
 }
@@ -85,7 +85,7 @@ void BasicBlock::gen_arm(ostream &o) {
     } else {
         // Conditional branch: test_var_name != 0 → exit_true, else → exit_false
         int testIdx = cfg->get_var_index_arm(test_var_name);
-        o << "    ldr w8, [sp, #" << testIdx << "]\n";
+        o << "    ldr w8, [x29, #" << testIdx << "]\n";
         o << "    cbz w8, " << exit_false->label << "\n";
         o << "    b " << exit_true->label << "\n";
     }
@@ -113,7 +113,7 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
 
             o << "    mov w8, #" << nb << "\n";
-            o << "    str w8, [sp, #" << index1 << "]\n";
+            o << "    str w8, [x29, #" << index1 << "]\n";
             break;
         case IRInstr::add:
             // var1 = var2 + var3
@@ -128,10 +128,10 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
-            o << "    ldr w8, [sp, #" << index2 << "]\n";
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]\n";
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    add w0, w8, w9\n";
-            o << "    str w0, [sp, #" << index1 << "]\n";
+            o << "    str w0, [x29, #" << index1 << "]\n";
 
             break;
         case IRInstr::sub:
@@ -146,10 +146,10 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
-            o << "    ldr w8, [sp, #" << index2 << "]\n";
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]\n";
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    subs w0, w8, w9\n";
-            o << "    str w0, [sp, #" << index1 << "]\n";
+            o << "    str w0, [x29, #" << index1 << "]\n";
             break;
         case IRInstr::copy:
             // var1 = var2
@@ -162,8 +162,8 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
 
-            o << "    ldr w0, [sp, #" << index2 << "]" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    ldr w0, [x29, #" << index2 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
 
             break;
         case IRInstr::rtrn:
@@ -171,7 +171,7 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
 
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
 
-            o << "    ldr w0, [sp, #" << index1 << "]\n";
+            o << "    ldr w0, [x29, #" << index1 << "]\n";
             o << "    b " << this->bb->cfg->functionName << "_end\n";
             break;
         case IRInstr::neg:
@@ -179,9 +179,9 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
 
             // On a w0 = - w8 <=> w0 = 0 - w8
-            o << "    ldr w8, [sp, #" << index1 <<"]" << endl;
+            o << "    ldr w8, [x29, #" << index1 <<"]" << endl;
             o << "    sub w0, wzr, w8" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
             break;
         case IRInstr::mul:
             // var1 = var2 * var3
@@ -195,10 +195,10 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
-            o << "    ldr w8, [sp, #" << index2 << "]\n";
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]\n";
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    mul w0, w8, w9\n";
-            o << "    str w0, [sp, #" << index1 << "]\n";
+            o << "    str w0, [x29, #" << index1 << "]\n";
             break;
         case IRInstr::div:
             // Forme : var1 = var2 / var3
@@ -212,10 +212,10 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
-            o << "    ldr w8, [sp, #" << index2 << "]\n";
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]\n";
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    sdiv w0, w8, w9\n";
-            o << "    str w0, [sp, #" << index1 << "]\n";
+            o << "    str w0, [x29, #" << index1 << "]\n";
             break;
         case IRInstr::mod:
             // Forme : var1 = var2 % var3
@@ -234,12 +234,12 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             // a = p // q (div entière)
             // b = a * q (= n - r)
             // r = p - b
-            o << "    ldr w8, [sp, #" << index2 << "]" << endl;
-            o << "    ldr w9, [sp, #" << index3 << "]" << endl;
+            o << "    ldr w8, [x29, #" << index2 << "]" << endl;
+            o << "    ldr w9, [x29, #" << index3 << "]" << endl;
             o << "    sdiv w10, w8, w9" << endl;
             o << "    mul w10, w10, w9" << endl;
             o << "    sub w0, w8, w10" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
 
             break;
         case IRInstr::lnot:
@@ -254,10 +254,10 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
 
             // On fait comme gcc, on utilise le fait que subs va positionner le flag Z si le résultat est nul 
             // eq est un test pour savoir si z == 1
-            o << "    ldr w8, [sp, #" << index2 << "]" << endl;
+            o << "    ldr w8, [x29, #" << index2 << "]" << endl;
             o << "    subs w8, w8, #0" << endl;
             o << "    cset w0, eq" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
 
             break;
         case IRInstr::call: {
@@ -272,9 +272,9 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
                 Type argT = this->bb->cfg->get_var_type(this->params.at(i));
                 int argIndex = this->bb->cfg->get_var_index_arm(this->params.at(i));
                 if (argT == DoubleType) {
-                    o << "    ldr " << dblCallArgRegs[dblIdx++] << ", [sp, #" << argIndex << "]\n";
+                    o << "    ldr " << dblCallArgRegs[dblIdx++] << ", [x29, #" << argIndex << "]\n";
                 } else {
-                    o << "    ldr " << intCallArgRegs[intIdx++] << ", [sp, #" << argIndex << "]\n";
+                    o << "    ldr " << intCallArgRegs[intIdx++] << ", [x29, #" << argIndex << "]\n";
                 }
             }
 
@@ -287,7 +287,7 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             // Store return value (w0) into destination
             this->bb->cfg->add_to_symbol_table(dest, this->t);
             int destIndex = this->bb->cfg->get_var_index_arm(dest);
-            o << "    str w0, [sp, #" << destIndex << "]\n";
+            o << "    str w0, [x29, #" << destIndex << "]\n";
             break;
         }
         case IRInstr::bxor:
@@ -299,10 +299,10 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
             // Forme : var1 = var2 ^ var3
-            o << "    ldr w8, [sp, #" << index2 << "]\n";
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]\n";
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    eor w0, w8, w9\n";
-            o << "    str w0, [sp, #" << index1 << "]\n";
+            o << "    str w0, [x29, #" << index1 << "]\n";
             break;
         case IRInstr::bor:
             nameVar1 = this->params.at(0);
@@ -313,10 +313,10 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
             // Forme : var1 = var2 | var3
-            o << "    ldr w8, [sp, #" << index2 << "]\n";
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]\n";
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    orr w0, w8, w9\n";
-            o << "    str w0, [sp, #" << index1 << "]\n";
+            o << "    str w0, [x29, #" << index1 << "]\n";
             break;
         case IRInstr::band:
             nameVar1 = this->params.at(0);
@@ -327,10 +327,10 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
             // Forme : var1 = var2 & var3
-            o << "    ldr w8, [sp, #" << index2 << "]\n";
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]\n";
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    and w0, w8, w9\n";
-            o << "    str w0, [sp, #" << index1 << "]\n";
+            o << "    str w0, [x29, #" << index1 << "]\n";
             break;
         case IRInstr::cmp_eq:
             nameVar1 = this->params.at(0);
@@ -343,11 +343,11 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             // Forme : var1 = var2 == var3
             // var2 == var3 <=> var2 - var3 == 0
             // subs va positionner le flag en fonction du résultat
-            o << "    ldr w8, [sp, #" << index2 << "]" << endl;
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]" << endl;
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    subs w8, w8, w9" << endl;
             o << "    cset w0, eq" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
             break;
         case IRInstr::cmp_ne:
             nameVar1 = this->params.at(0);
@@ -359,11 +359,11 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
             // var1 = var2 != var3
             // Même fonctionnement que pour eq mais on regardre si z == 0
-            o << "    ldr w8, [sp, #" << index2 << "]" << endl;
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]" << endl;
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    subs w8, w8, w9" << endl;
             o << "    cset w0, ne" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
             break;
         case IRInstr::cmp_lt:
             nameVar1 = this->params.at(0);
@@ -375,11 +375,11 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             //var1 = var2 < var3
-            o << "    ldr w8, [sp, #" << index2 << "]" << endl;
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]" << endl;
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    subs w8, w8, w9" << endl;
             o << "    cset w0, lt" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
             break;
         case IRInstr::cmp_le:
             nameVar1 = this->params.at(0);
@@ -391,11 +391,11 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             //var1 = var2 <= var3
-            o << "    ldr w8, [sp, #" << index2 << "]" << endl;
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]" << endl;
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    subs w8, w8, w9" << endl;
             o << "    cset w0, le" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
             break;
         case IRInstr::cmp_gt:
             nameVar1 = this->params.at(0);
@@ -407,11 +407,11 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             //var1 = var2 > var3
-            o << "    ldr w8, [sp, #" << index2 << "]" << endl;
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]" << endl;
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    subs w8, w8, w9" << endl;
             o << "    cset w0, gt" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
             break;
         case IRInstr::cmp_ge:
             nameVar1 = this->params.at(0);
@@ -423,11 +423,11 @@ void IRInstr::gen_arm(ostream &o) {    std::string nameVar1, nameVar2, nameVar3;
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             //var1 = var2 >= var3
-            o << "    ldr w8, [sp, #" << index2 << "]" << endl;
-            o << "    ldr w9, [sp, #" << index3 << "]\n";
+            o << "    ldr w8, [x29, #" << index2 << "]" << endl;
+            o << "    ldr w9, [x29, #" << index3 << "]\n";
             o << "    subs w8, w8, w9" << endl;
             o << "    cset w0, ge" << endl;
-            o << "    str w0, [sp, #" << index1 << "]" << endl;
+            o << "    str w0, [x29, #" << index1 << "]" << endl;
             break;
         default:
             break;
