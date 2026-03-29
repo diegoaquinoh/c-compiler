@@ -146,24 +146,37 @@ string IRGenVisitor::scopedName(const string &name) {
 
 antlrcpp::Any IRGenVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
-    for (auto *func : ctx->func_def()) {
+    for (auto *func : ctx->func()) {
         this->visit(func);
     }
     return 0;
 }
 
-antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
+antlrcpp::Any IRGenVisitor::visitFunc(ifccParser::FuncContext *ctx)
 {
     string funcName = ctx->VAR()->getText();
 
-    // Parse and store return type
     string retTypeStr = ctx->TYPE()->getText();
     if (retTypeStr == "double") currentFunctionReturnType = DoubleType;
     else if (retTypeStr == "void") currentFunctionReturnType = VoidType;
     else currentFunctionReturnType = IntType;
     functionReturnType[funcName] = currentFunctionReturnType;
 
-    // Create a new CFG for this function
+    vector<Type> paramTypes;
+    if (ctx->param_list()) {
+        auto *paramList = ctx->param_list();
+        auto types = paramList->TYPE();
+        for (size_t i = 0; i < types.size(); i++) {
+            Type pt = (types[i]->getText() == "double") ? DoubleType : IntType;
+            paramTypes.push_back(pt);
+        }
+    }
+    if (ctx->block() == nullptr) {
+        functionParamTypes[funcName] = paramTypes;
+        return 0;
+    }
+
+    // Full function definition — create CFG and generate IR
     CFG* cfg = new CFG(&this->ir);
     cfg->functionName = funcName;
 
@@ -176,16 +189,16 @@ antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
     if (ctx->param_list()) {
         auto params = ctx->param_list()->VAR();
         auto types = ctx->param_list()->TYPE();
-        vector<Type> paramTypes;
+        vector<Type> definitionParamTypes;
         for (size_t i = 0; i < params.size(); i++) {
             string paramName = params[i]->getText();
             string irName = declareScoped(paramName);
             cfg->paramNames.push_back(irName);
             Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
-            paramTypes.push_back(paramType);
+            definitionParamTypes.push_back(paramType);
             cfg->add_to_symbol_table(irName, paramType);
         }
-        functionParamTypes[funcName] = paramTypes;
+        functionParamTypes[funcName] = definitionParamTypes;
     } else {
         functionParamTypes[funcName] = {};
     }
