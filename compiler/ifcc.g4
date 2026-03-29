@@ -17,6 +17,7 @@ stmt : decl_stmt
      | break_stmt
      | while_stmt
      | return_stmt
+     | block
      ;
 
 decl_stmt : TYPE ptr_suffix decl_item (',' decl_item)* ';' ;

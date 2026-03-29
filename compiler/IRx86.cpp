@@ -12,8 +12,6 @@ static std::string double_to_hex_immediate(const std::string &literal) {
     return oss.str();
 }
 
-// IR //
-
 void IR::gen_x86(ostream &o) {
     for (const auto& entry : cfgsMap) {
         const string& functionName = entry.first;
@@ -25,13 +23,6 @@ void IR::gen_x86(ostream &o) {
         cfg->gen_x86_prologue(o, functionName);
         cfg->gen_x86(o);
     }
-}
-
-// CFG // 
-
-string CFG::IR_reg_to_asm(string reg) {
-    int index = this->get_var_index_x86(reg);
-    return to_string(index) + "(%rbp)";
 }
 
 void CFG::gen_x86_prologue(ostream &o, const string& functionName){
@@ -83,8 +74,6 @@ int CFG::get_var_index_x86(string name){
     return this->SymbolIndex.at(name) * -8;
 }
 
-// BasicBlock // 
-
 void BasicBlock::gen_x86(ostream &o) {
     o << this->label << ":\n";
 
@@ -92,7 +81,6 @@ void BasicBlock::gen_x86(ostream &o) {
         instr->gen_x86(o);
     }
 
-    // Epilogue : we end execution
     if (this->exit_true == nullptr) {
         o << "    movq %rbp, %rsp\n";
         o << "    popq %rbp\n";
@@ -105,7 +93,6 @@ void BasicBlock::gen_x86(ostream &o) {
         return;
     }
 
-    //o << "    cmpl $0, " << this->cfg->IR_reg_to_asm("!reg") << "\n";
     o << "    cmpl $0, %eax\n";
     o << "    je " << this->exit_false->label << "\n";
     o << "    jmp " << this->exit_true->label << "\n";
@@ -228,7 +215,6 @@ void IRInstr::gen_x86(ostream &o) {
             break;
 
         case IRInstr::itod:
-            // int cast en double
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             if (nameVar2 == "!reg") {
@@ -244,7 +230,6 @@ void IRInstr::gen_x86(ostream &o) {
             break;
 
         case IRInstr::dtoi:
-            // double cast en int
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             if (nameVar2 == "!freg") {
@@ -261,7 +246,6 @@ void IRInstr::gen_x86(ostream &o) {
             break;
 
         case IRInstr::add:
-            // var1 = var2 + var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -313,7 +297,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::mul:
-            //var1 = var2 * var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -343,7 +326,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::sub:
-            //var1 = var2 - var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -411,7 +393,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::div:
-            //var1 = var2 / var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -457,7 +438,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::mod:
-            // Forme : var1 = var2 % var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -514,7 +494,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::lnot:
-            // Forme : var1 = !var2
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             if (this->t == DoubleType) {
@@ -544,7 +523,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::bxor:
-            // Forme : var1 = var2 ^ var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -562,7 +540,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::bor:
-            // Forme : var1 = var2 | var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -599,8 +576,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::cmp_eq:
-            // var1 = var2 == var3
-            // le résultat est forcément un int (0 ou 1)
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -654,8 +629,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::cmp_ne:
-            // var1 = var2 != var3
-            // le résultat est forcément un int (0 ou 1)
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -709,7 +682,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::cmp_lt:
-            // var1 = var2 < var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -765,7 +737,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::cmp_le:
-            // var1 = var2 <= var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -821,7 +792,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::cmp_gt:
-            // var1 = var2 > var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);
@@ -877,7 +847,6 @@ void IRInstr::gen_x86(ostream &o) {
             }
             break;
         case IRInstr::cmp_ge:
-            // var1 = var2 >= var3
             nameVar1 = this->params.at(0);
             nameVar2 = this->params.at(1);
             nameVar3 = this->params.at(2);

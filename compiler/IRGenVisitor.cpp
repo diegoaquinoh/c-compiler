@@ -387,7 +387,7 @@ antlrcpp::Any IRGenVisitor::visitFunc(ifccParser::FuncContext *ctx)
     }
 
     // Full function definition — create CFG and generate IR
-    CFG* cfg = new CFG(&this->ir);
+    CFG* cfg = new CFG();
     cfg->functionName = funcName;
 
     // Reset scope state
@@ -937,16 +937,17 @@ antlrcpp::Any IRGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx
 {
     if (ctx->expr()) {
         Type exprType = inferExprType(ctx->expr());
+        Type retType = (currentFunctionReturnType == VoidType) ? IntType : currentFunctionReturnType;
         this->visit(ctx->expr());
-        if (currentFunctionReturnType == PointerType && exprType == IntType && isZeroLiteralExpr(ctx->expr())) {
+        if (retType == PointerType && exprType == IntType && isZeroLiteralExpr(ctx->expr())) {
             vector<string> z = {preg, "0"};
             this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, PointerType, z);
         } else {
-            ensureValueInReg(exprType, currentFunctionReturnType);
+            ensureValueInReg(exprType, retType);
         }
 
-        vector<string> v = {activeReg(currentFunctionReturnType)};
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, currentFunctionReturnType, v);
+        vector<string> v = {activeReg(retType)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rtrn, retType, v);
     }
     // else: bare "return;" -- no rtrn instruction, just trigger epilogue
 
@@ -1217,6 +1218,10 @@ antlrcpp::Any IRGenVisitor::visitBitwiseor(ifccParser::BitwiseorContext *ctx){
 antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     string funcName = ctx->VAR()->getText();
     auto args = ctx->expr();
+    Type retType = IntType;
+    if (functionReturnType.count(funcName)) {
+        retType = functionReturnType[funcName];
+    }
 
     // 1. Evaluate each arg and convert to the expected parameter type
     vector<string> argTempNames;
@@ -1244,7 +1249,6 @@ antlrcpp::Any IRGenVisitor::visitFuncCall(ifccParser::FuncCallContext *ctx) {
     }
 
     // 2. Generate call instruction with the function name and the temp stack slots as arguments
-    Type retType = functionReturnType.count(funcName) ? functionReturnType[funcName] : IntType;
     vector<string> callArgs = {activeReg(retType), funcName};
     callArgs.insert(callArgs.end(), argTempNames.begin(), argTempNames.end());
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::call, retType, callArgs);

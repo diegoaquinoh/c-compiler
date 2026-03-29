@@ -169,6 +169,12 @@ SymbolTableVisitor::ExprTypeInfo SymbolTableVisitor::inferExprType(ifccParser::E
     }
 
     if (auto *n = dynamic_cast<ifccParser::NegativeContext *>(ctx)) {
+        if (dynamic_cast<ifccParser::NegativeContext *>(n->expr()) != nullptr) {
+            cerr << "error: double negation is not allowed\n";
+            errorFlag = true;
+            return {IntType, false, IntType, 0};
+        }
+
         ExprTypeInfo t = inferExprType(n->expr());
         if (t.type == PointerType) {
             cerr << "error: invalid use of unary '-' on pointer\n";
