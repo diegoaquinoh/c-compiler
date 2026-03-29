@@ -19,9 +19,10 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         void exitScope();
 
         // Variable management
-        void declareVar(const std::string &name, Type t);
+        void declareVar(const std::string &name, Type t, bool isArray = false, int arraySize = 0);
         void useVar(const std::string &name);
         Type getVarType(const string &name) const;
+        bool isVarArray(const string &name) const;
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;
         virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
@@ -70,10 +71,19 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         bool hasError() const { return errorFlag; }
 
     private:
+        struct VarInfo {
+            string name;
+            Type type;
+            bool isArray;
+            int arraySize;
+        };
+
+        const VarInfo *lookupVar(const string &name) const;
+        bool isLvalueExpr(ifccParser::ExprContext *ctx) const;
         Type inferExprType(ifccParser::ExprContext *ctx);
         Type currentDeclType = IntType;
         // Per-function scope stack
-        vector<pair<string, Type>> varStack;    // (varName, stackOffset)
+        vector<VarInfo> varStack;
         vector<int> scopeMarkers;              // marks where each scope begins in varStack
 
         // Global function registry

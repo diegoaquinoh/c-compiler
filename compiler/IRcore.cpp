@@ -53,6 +53,10 @@ int CFG::get_var_index(string name){
     return this->SymbolIndex.at(name);
 }
 
+int CFG::get_var_frame_offset(string name){
+    return this->SymbolIndex.at(name) * -8;
+}
+
 Type CFG::get_var_type(string name){
     return this->SymbolType.at(name);
 }

@@ -68,6 +68,10 @@ Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     }
 
     if (auto *a = dynamic_cast<ifccParser::AffectStmtContext *>(ctx)) {
+        return inferExprType(a->expr(0));
+    }
+
+    if (auto *a = dynamic_cast<ifccParser::ArrayAccessContext *>(ctx)) {
         string irName = scopedName(a->VAR()->getText());
         return this->ir.currentCfg->get_var_type(irName);
     }
@@ -107,6 +111,39 @@ string IRGenVisitor::createVariableTmp(Type t) {
     string nameVar = "!tmp" + to_string(cptTempVariables++);
     this->ir.currentCfg->add_to_symbol_table(nameVar, t);
     return nameVar;
+}
+
+string IRGenVisitor::emitArrayElementOffset(const string &arrayScopedName, ifccParser::ExprContext *indexExpr) {
+    // Etape 1: evaluer l'indice dans l'accumulateur (!reg)
+    Type indexType = inferExprType(indexExpr);
+    this->visit(indexExpr);
+    ensureValueInReg(indexType, IntType);
+
+    string indexTmp = createVariableTmp(IntType);
+    vector<string> saveIndex = {indexTmp, ireg};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, saveIndex);
+
+    string elemSizeTmp = createVariableTmp(IntType);
+    vector<string> ldElemSize = {elemSizeTmp, "8"};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, ldElemSize);
+
+    // Etape 2: offset element = index * tailleCase
+    string scaledIndexTmp = createVariableTmp(IntType);
+    vector<string> scaleIndex = {scaledIndexTmp, indexTmp, elemSizeTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, scaleIndex);
+
+    string baseOffsetTmp = createVariableTmp(IntType);
+    int baseOffset = this->ir.currentCfg->get_var_frame_offset(arrayScopedName);
+    vector<string> ldBaseOffset = {baseOffsetTmp, to_string(baseOffset)};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, ldBaseOffset);
+
+    // Etape 3: offset final relatif a %rbp
+    // La pile croit vers les adresses basses, l'element i est a (base - i * tailleCase)
+    string finalOffsetTmp = createVariableTmp(IntType);
+    vector<string> sumOffset = {finalOffsetTmp, baseOffsetTmp, scaledIndexTmp};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, sumOffset);
+
+    return finalOffsetTmp;
 }
 
 // --- Scope management for variable renaming ---
@@ -165,6 +202,7 @@ antlrcpp::Any IRGenVisitor::visitFunc_def(ifccParser::Func_defContext *ctx)
     // Reset scope state
     scopeStack.clear();
     scopeCounter = 0;
+    arraySizeByScopedName.clear();
     enterScope(); // function-level scope
 
     // Register parameter names
@@ -252,6 +290,18 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
     string irName = declareScoped(varName);
     this->ir.currentCfg->add_to_symbol_table(irName, currentDeclType);
 
+    if (ctx->CONST()) {
+        // Alors c'est la déclaration d'un tableau
+        int arraySize = stoi(ctx->CONST()->getText());
+        arraySizeByScopedName[irName] = arraySize;
+
+        // On reserve des cases contigues pour que les acces par offset soient lineaires en memoire
+        // Convention de nom : nomTab#indice
+        for (int i = 1; i < arraySize; i++) {
+            this->ir.currentCfg->add_to_symbol_table(irName + "#" + to_string(i), currentDeclType);
+        }
+    }
+
     if (ctx->expr()) {
         // Initialisation: evaluer l'expression, convertir si besoin, puis copier vers la variable.
         Type exprType = inferExprType(ctx->expr());
@@ -266,13 +316,42 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 {
-    string varName = ctx->VAR()->getText();
+    auto *lhsArray = dynamic_cast<ifccParser::ArrayAccessContext *>(ctx->expr(0));
+
+    if (lhsArray != nullptr) {
+        // Tableau
+        string arrayScopedName = scopedName(lhsArray->VAR()->getText());
+        Type elemType = this->ir.currentCfg->get_var_type(arrayScopedName);
+
+        // On evalue d'abord la RHS, puis on la fige dans un temporaire pour ne pas la perdre
+        // pendant le calcul de l'adresse mémoire
+        Type rhsType = inferExprType(ctx->expr(1));
+        this->visit(ctx->expr(1));
+        ensureValueInReg(rhsType, elemType);
+
+        string rhsTmp = createVariableTmp(elemType);
+        vector<string> saveRhs = {rhsTmp, activeReg(elemType)};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, elemType, saveRhs);
+
+        string lvalueOffset = emitArrayElementOffset(arrayScopedName, lhsArray->expr());
+        vector<string> store = {lvalueOffset, rhsTmp};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::wmem, elemType, store);
+
+        // On fixe la valeur affectee dans l'accumulateur pour la renvoyer
+        vector<string> restoreExprVal = {activeReg(elemType), rhsTmp};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, elemType, restoreExprVal);
+        return 0;
+    }
+
+    auto *lhsVar = dynamic_cast<ifccParser::VarContext *>(ctx->expr(0));
+    // Variable
+    string varName = lhsVar->VAR()->getText();
     string irName = scopedName(varName);
     Type varType = this->ir.currentCfg->get_var_type(irName);
 
-    // le type cible est celui de la lvalue de gauche.
-    Type exprType = inferExprType(ctx->expr());
-    this->visit(ctx->expr());
+    // le type cible est celui de la lvalue de gauche
+    Type exprType = inferExprType(ctx->expr(1));
+    this->visit(ctx->expr(1));
     ensureValueInReg(exprType, varType);
 
     // On sauvegarde la valeur de droite avant de calculer l'adresse et offset de la lvalue
@@ -283,7 +362,7 @@ antlrcpp::Any IRGenVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx)
 
     // Lvalue simple pour une variable : offset relatif a %rbp
     string lvalueOffset = createVariableTmp(IntType);
-    int targetOffset = this->ir.currentCfg->get_var_index_x86(irName);
+    int targetOffset = this->ir.currentCfg->get_var_frame_offset(irName);
     vector<string> ldOffset = {lvalueOffset, to_string(targetOffset)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, ldOffset);
 
@@ -339,6 +418,20 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
 
     vector<string> v = {activeReg(varType), irName};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, v);
+
+    return 0;
+}
+
+antlrcpp::Any IRGenVisitor::visitArrayAccess(ifccParser::ArrayAccessContext *ctx)
+{
+    string varName = ctx->VAR()->getText();
+    string arrayScopedName = scopedName(varName);
+    Type elemType = this->ir.currentCfg->get_var_type(arrayScopedName);
+
+    // rmem lit *(rbp + offset) dans le registre actif du type
+    string elementOffset = emitArrayElementOffset(arrayScopedName, ctx->expr());
+    vector<string> load = {activeReg(elemType), elementOffset};
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::rmem, elemType, load);
 
     return 0;
 }

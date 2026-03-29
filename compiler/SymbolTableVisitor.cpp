@@ -13,18 +13,18 @@ void SymbolTableVisitor::exitScope() {
     varStack.resize(marker);
 }
 
-void SymbolTableVisitor::declareVar(const std::string &name, Type t) {
+void SymbolTableVisitor::declareVar(const std::string &name, Type t, bool isArray, int arraySize) {
     // Check for redeclaration within current scope only
     int scopeStart = scopeMarkers.back();
     for (int i = scopeStart; i < (int)varStack.size(); i++) {
-        if (varStack[i].first == name) {
+        if (varStack[i].name == name) {
             cerr << "error: variable '" << name << "' declared multiple times in same scope\n";
             errorFlag = true;
             return;
         }
     }
 
-    varStack.push_back({name, t});
+    varStack.push_back({name, t, isArray, arraySize});
     // Also add to the flat symbol table for IRGenVisitor
     allSymbolTables[currentFunction][name] = t;
 }
@@ -33,28 +33,46 @@ void SymbolTableVisitor::useVar(const std::string &name) {
     // Search from back to front
     bool found = false;
     for (int i = (int)varStack.size() - 1; i >= 0; i--) {
-        if (varStack[i].first == name) {
-            found = true;
-            break;
+        if (varStack[i].name == name) {
+            usedVars.insert(name);
+            return;
         }
     }
-    if (!found) {
-        cerr << "error: variable '" << name << "' used before declaration\n";
-        errorFlag = true;
-    } else {
-        usedVars.insert(name);
-    }
+    // Si on est là, on a parcouru tout le stack sans trouver la variable
+    cerr << "error: variable '" << name << "' used before declaration\n";
+    errorFlag = true;
 }
 
 Type SymbolTableVisitor::getVarType(const std::string &name) const {
-    for (int i = (int)varStack.size() - 1; i >= 0; i--) {
-        if (varStack[i].first == name) {
-            return varStack[i].second;
-        }
-    }
-    return IntType;
+    const VarInfo *var = lookupVar(name);
+    return var->type;
 }
 
+bool SymbolTableVisitor::isVarArray(const std::string &name) const {
+    const VarInfo *var = lookupVar(name);
+    return var != nullptr && var->isArray;
+}
+
+const SymbolTableVisitor::VarInfo *SymbolTableVisitor::lookupVar(const string &name) const {
+    for (int i = (int)varStack.size() - 1; i >= 0; i--) {
+        if (varStack[i].name == name) {
+            return &varStack[i];
+        }
+    }
+    return nullptr;
+}
+
+bool SymbolTableVisitor::isLvalueExpr(ifccParser::ExprContext *ctx) const {
+    // Soit c'est une variable soit un arrayAccess (tab[])
+    return dynamic_cast<ifccParser::VarContext *>(ctx) != nullptr |
+        dynamic_cast<ifccParser::ArrayAccessContext *>(ctx) != nullptr;
+}
+
+/**
+ * inferExprType permet de récupérer le "type final" d'une expression
+ * Mais aussi de vérifier que l'expression respecte bien les conventions qu'on s'est posé
+ * qu'il n'y a pas d'effet de bord et positionner errorFlag quand il le faut.
+ */
 Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     if (ctx == nullptr) {
         return IntType;
@@ -70,6 +88,28 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
         string name = v->VAR()->getText();
         useVar(name);
+        if (isVarArray(name)) {
+            cerr << "error: array '" << name << "' cannot be used as a scalar expression\n";
+            errorFlag = true;
+        }
+        return getVarType(name);
+    }
+
+    if (auto *a = dynamic_cast<ifccParser::ArrayAccessContext *>(ctx)) {
+        string name = a->VAR()->getText();
+        useVar(name);
+        // L'accès [] est autorisé uniquement pour un tableau
+        if (!isVarArray(name)) {
+            cerr << "error: variable '" << name << "' is not an array\n";
+            errorFlag = true;
+        }
+
+        // L'indice doit être un entier 
+        Type idxType = inferExprType(a->expr());
+        if (idxType != IntType) {
+            cerr << "error: array index for '" << name << "' must be of type int\n";
+            errorFlag = true;
+        }
         return getVarType(name);
     }
 
@@ -153,12 +193,29 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
     }
 
     if (auto *a = dynamic_cast<ifccParser::AffectStmtContext *>(ctx)) {
-        string name = a->VAR()->getText();
-        useVar(name);
-        if (a->expr()) {
-            inferExprType(a->expr());
+        // Avec la regle expr '=' expr, la validation de la lvalue se fait ici
+        if (!isLvalueExpr(a->expr(0))) {
+            cerr << "error: left-hand side of assignment is not an lvalue\n";
+            errorFlag = true;
         }
-        return getVarType(name);
+
+        Type lhsType = inferExprType(a->expr(0));
+        Type rhsType = inferExprType(a->expr(1));
+
+        if (dynamic_cast<ifccParser::VarContext *>(a->expr(0)) != nullptr) {
+            auto *lhsVar = static_cast<ifccParser::VarContext *>(a->expr(0));
+            string lhsName = lhsVar->VAR()->getText();
+            if (isVarArray(lhsName)) {
+                cerr << "error: array '" << lhsName << "' cannot be assigned as a scalar\n";
+                errorFlag = true;
+            }
+        }
+
+        if (rhsType == DoubleType && lhsType == IntType) {
+            // Allowed by existing semantics (implicit narrowing in current project rules).
+        }
+
+        return lhsType;
     }
 
     if (auto *f = dynamic_cast<ifccParser::FuncCallContext *>(ctx)) {
@@ -264,7 +321,26 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *c
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx) {
     string varName = ctx->VAR()->getText();
-    declareVar(varName, currentDeclType);
+    bool isArray = ctx->CONST() != nullptr;
+    int arraySize = 0;
+    if (isArray) {
+        arraySize = stoi(ctx->CONST()->getText());
+        // On force une taille strictement positive pour eviter des offsets invalides en generation
+        // Gcc autorise une taille nulle mais pas nous : ça hérite de vieilles retro-compatibilités
+        if (arraySize <= 0) {
+            cerr << "error: array '" << varName << "' size must be positive\n";
+            errorFlag = true;
+        }
+
+        if (ctx->expr()) {
+            // On a une initialialisation alors que c'est un tableau => problème
+            cerr << "error: array '" << varName << "' initializer is not supported\n";
+            errorFlag = true;
+        }
+    }
+
+    declareVar(varName, currentDeclType, isArray, arraySize);
+
     if (ctx->expr()) {
         inferExprType(ctx->expr());
     }
@@ -318,11 +394,7 @@ antlrcpp::Any SymbolTableVisitor::visitBreak_stmt(ifccParser::Break_stmtContext 
 }
 
 antlrcpp::Any SymbolTableVisitor::visitAffectStmt(ifccParser::AffectStmtContext *ctx) {
-    string varName = ctx->VAR()->getText();
-    useVar(varName);
-    if (ctx->expr()) {
-        inferExprType(ctx->expr());
-    }
+    inferExprType(ctx);
     return 0;
 }
 

@@ -135,6 +135,7 @@ class CFG {
 		void gen_x86_prologue(ostream& o, const string& functionName);
 		void gen_x86_epilogue(ostream& o);
 		int get_var_index(string name);
+		int get_var_frame_offset(string name);
 		int get_var_index_x86(string name);
 
 	// arm code generation
