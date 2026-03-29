@@ -1,18 +1,16 @@
 These failed :
 
 11_05 — if_with_logical_and_or — parser lacks && / ||
-13_07 — scope_shadow_array — bare nested blocks unsupported
+
 13_11 — invalid_zero_size — rejects GCC-accepted int a[0]
 13_15 — invalid_array_scalar_expr — 
-1_1 — test_avec_deux_accolades — bare nested blocks unsupported
-2_49 — neg_double — --10 parsed as two unary -
-2_50 — neg_triple — ---5 parsed as chained unary -
+
 4_11 — missing_int_main — gcc supports it but not C standard
 4_18 — empty_return — 
 4_23 — double_semicolon — empty statement ; unsupported
-4_40 — double_braces — nested block statements unsupported
+
 8_21 — call_before_def — 
 8_25 — void_return_value — 
 9_15 — missing_switch_brace — switch body forced to use braces
 
-14 fail
+9 fail
