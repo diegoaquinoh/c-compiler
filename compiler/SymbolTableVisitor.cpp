@@ -229,28 +229,99 @@ Type SymbolTableVisitor::inferExprType(ifccParser::ExprContext *ctx) {
 
     return IntType;
 }
+// --- Signature parsing helper ---
+
+SymbolTableVisitor::FuncSignature SymbolTableVisitor::parseSignature(
+        antlr4::tree::TerminalNode *typeNode, antlr4::tree::TerminalNode *varNode,
+        ifccParser::Param_listContext *paramList) {
+    FuncSignature sig;
+    sig.name = varNode->getText();
+
+    string retTypeStr = typeNode->getText();
+    if (retTypeStr == "double") sig.returnType = DoubleType;
+    else if (retTypeStr == "void") sig.returnType = VoidType;
+    else sig.returnType = IntType;
+
+    sig.paramCount = 0;
+    if (paramList) {
+        auto types = paramList->TYPE();
+        sig.paramCount = types.size();
+        for (size_t i = 0; i < types.size(); i++) {
+            if (types[i]->getText() == "void") {
+                cerr << "error: parameter has incomplete type 'void'\n";
+                errorFlag = true;
+                sig.paramTypes.push_back(IntType);
+                continue;
+            }
+            Type pt = (types[i]->getText() == "double") ? DoubleType : IntType;
+            sig.paramTypes.push_back(pt);
+        }
+    }
+    return sig;
+}
+
 // --- Visitors ---
 
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx) {
-    for (auto *func : ctx->func_def()) {
+    bool hasDefinition = false;
+    for (auto *func : ctx->func()) {
+        if (func->block() != nullptr) {
+            hasDefinition = true;
+        }
         this->visit(func);
+    }
+    if (!hasDefinition) {
+        cerr << "error: program must contain at least one function definition\n";
+        errorFlag = true;
     }
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx) {
-    string funcName = ctx->VAR()->getText();
-    if (knownFunctions.count(funcName)) {
-        cerr << "error: function '" << funcName << "' already declared\n";
-        errorFlag = true;
+antlrcpp::Any SymbolTableVisitor::visitFunc(ifccParser::FuncContext *ctx) {
+    FuncSignature sig = parseSignature(ctx->TYPE(), ctx->VAR(), ctx->param_list());
+    string funcName = sig.name;
+    bool isPrototype = (ctx->block() == nullptr);
+
+    if (isPrototype) {
+        if (knownFunctions.count(funcName)) {
+            bool conflict = false;
+            if (functionReturnType[funcName] != sig.returnType) conflict = true;
+            if (functionArgCount[funcName] != sig.paramCount) conflict = true;
+            if (!conflict && functionParamTypes[funcName] != sig.paramTypes) conflict = true;
+
+            if (conflict) {
+                cerr << "error: conflicting declaration for function '" << funcName << "'\n";
+                errorFlag = true;
+            }
+            return 0;
+        }
+
+        knownFunctions.insert(funcName);
+        functionReturnType[funcName] = sig.returnType;
+        functionArgCount[funcName] = sig.paramCount;
+        functionParamTypes[funcName] = sig.paramTypes;
+        return 0;
     }
 
-    // Parse and store return type
-    string retTypeStr = ctx->TYPE()->getText();
-    if (retTypeStr == "double") currentFunctionReturnType = DoubleType;
-    else if (retTypeStr == "void") currentFunctionReturnType = VoidType;
-    else currentFunctionReturnType = IntType;
-    functionReturnType[funcName] = currentFunctionReturnType;
+    if (definedFunctions.count(funcName)) {
+        cerr << "error: function '" << funcName << "' already defined\n";
+        errorFlag = true;
+    } else if (knownFunctions.count(funcName)) {
+        bool conflict = false;
+        if (functionReturnType[funcName] != sig.returnType) conflict = true;
+        if (functionArgCount[funcName] != sig.paramCount) conflict = true;
+        if (!conflict && functionParamTypes[funcName] != sig.paramTypes) conflict = true;
+
+        if (conflict) {
+            cerr << "error: conflicting types for function '" << funcName << "'\n";
+            errorFlag = true;
+        }
+    }
+
+    currentFunctionReturnType = sig.returnType;
+    functionReturnType[funcName] = sig.returnType;
+    knownFunctions.insert(funcName);
+    definedFunctions.insert(funcName);
 
     currentFunction = funcName;
     allSymbolTables[currentFunction] = {};
@@ -259,39 +330,22 @@ antlrcpp::Any SymbolTableVisitor::visitFunc_def(ifccParser::Func_defContext *ctx
     usedVars.clear();
     nextIndex = 0;
 
-    // Register this function so other functions can call it
-    knownFunctions.insert(funcName);
+    auto *paramList = ctx->param_list();
+    if (paramList) {
+        auto params = paramList->VAR();
+        functionArgCount[funcName] = params.size();
+        functionParamTypes[funcName] = sig.paramTypes;
 
-    // Count parameters and store their types
-    int paramCount = 0;
-    if (ctx->param_list()) {
-        auto params = ctx->param_list()->VAR();
-        auto types = ctx->param_list()->TYPE();
-        paramCount = params.size();
-        functionArgCount[funcName] = paramCount;
-
-        // Enter function scope and declare parameters
         enterScope();
-        vector<Type> paramTypes;
         for (size_t i = 0; i < params.size(); i++) {
-            if (types[i]->getText() == "void") {
-                cerr << "error: parameter '" << params[i]->getText() << "' has incomplete type 'void'\n";
-                errorFlag = true;
-                paramTypes.push_back(IntType); // placeholder
-                continue;
-            }
-            Type paramType = (types[i]->getText() == "double") ? DoubleType : IntType;
-            paramTypes.push_back(paramType);
-            declareVar(params[i]->getText(), paramType);
+            declareVar(params[i]->getText(), sig.paramTypes[i]);
         }
-        functionParamTypes[funcName] = paramTypes;
     } else {
         functionArgCount[funcName] = 0;
         functionParamTypes[funcName] = {};
         enterScope();
     }
 
-    // Visit the function body block (block will handle its own scope)
     this->visit(ctx->block());
 
     for (auto &[name, idx] : allSymbolTables[currentFunction]) {

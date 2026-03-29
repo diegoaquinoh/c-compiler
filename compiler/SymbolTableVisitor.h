@@ -24,7 +24,7 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         Type getVarType(const string &name) const;
 
         virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override ;
-        virtual antlrcpp::Any visitFunc_def(ifccParser::Func_defContext *ctx) override;
+        virtual antlrcpp::Any visitFunc(ifccParser::FuncContext *ctx) override;
         virtual antlrcpp::Any visitBlock(ifccParser::BlockContext *ctx) override;
 
         virtual antlrcpp::Any visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) override ;
@@ -72,6 +72,14 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         bool hasError() const { return errorFlag; }
 
     private:
+        struct FuncSignature {
+            string name;
+            Type returnType;
+            int paramCount;
+            vector<Type> paramTypes;
+        };
+        FuncSignature parseSignature(antlr4::tree::TerminalNode *typeNode, antlr4::tree::TerminalNode *varNode, ifccParser::Param_listContext *paramList);
+
         Type inferExprType(ifccParser::ExprContext *ctx);
         Type currentDeclType = IntType;
         // Per-function scope stack
@@ -84,6 +92,7 @@ class SymbolTableVisitor: public ifccBaseVisitor {
         set<string> usedVars;
         int nextIndex = 0;
         bool errorFlag = false;
+        set<string> definedFunctions;
         set<string> knownFunctions = {"putchar", "getchar"};
         map<string, int> functionArgCount = {{"putchar", 1}, {"getchar", 0}};
         map<string, Type> functionReturnType = {{"putchar", IntType}, {"getchar", IntType}};
