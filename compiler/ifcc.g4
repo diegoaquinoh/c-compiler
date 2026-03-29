@@ -18,7 +18,7 @@ stmt : decl_stmt
      ;
 
 decl_stmt : TYPE decl_item (',' decl_item)* ';' ;
-decl_item : VAR ('=' expr)? ;
+decl_item : VAR ('[' CONST ']')? ('=' expr)? ;
 
 if_stmt: 'if' '(' expr ')' block (else_stmt)? ;
 else_stmt: 'else' block ;
@@ -37,6 +37,7 @@ break_stmt : 'break' ';' ;
 return_stmt : RETURN expr? ';' ;
 
 expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
+     | VAR '[' expr ']'                      # arrayAccess
      | '(' expr ')'                          # parens
      | '-' expr                              # negative
      | '!' expr                              # logicalnot
@@ -47,7 +48,7 @@ expr : VAR '(' (expr (',' expr)*)? ')'       # funcCall
      | expr '&' expr                         # bitwiseand
      | expr '^' expr                         # bitwisexor
      | expr '|' expr                         # bitwiseor
-     | VAR '=' expr                          # affectStmt
+     | <assoc=right> expr '=' expr           # affectStmt
      | DOUBLE_CONST                          # const
      | CONST                                 # const
      | CHAR_CONST                            # const

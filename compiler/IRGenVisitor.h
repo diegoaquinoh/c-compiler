@@ -42,6 +42,7 @@ class IRGenVisitor : public ifccBaseVisitor {
 
         virtual antlrcpp::Any visitConst(ifccParser::ConstContext *ctx) override;
         virtual antlrcpp::Any visitVar(ifccParser::VarContext *ctx) override;
+        virtual antlrcpp::Any visitArrayAccess(ifccParser::ArrayAccessContext *ctx) override;
 
         virtual antlrcpp::Any visitBitwiseand(ifccParser::BitwiseandContext *ctx) override;
         virtual antlrcpp::Any visitBitwisexor(ifccParser::BitwisexorContext *ctx) override;
@@ -69,6 +70,7 @@ class IRGenVisitor : public ifccBaseVisitor {
                 string activeReg(Type t) const;
                 void emitConvert(Type src, Type dst, const string &srcName, const string &dstName);
                 void ensureValueInReg(Type currentType, Type targetType);
+                string emitArrayElementOffset(const string &arrayScopedName, ifccParser::ExprContext *indexExpr);
                 int cptTempVariables = 0;
                 int scopeCounter = 0;
                 bool breakTriggered = false;
@@ -77,6 +79,7 @@ class IRGenVisitor : public ifccBaseVisitor {
                 map<string, Type> functionReturnType = {{"putchar", IntType}, {"getchar", IntType}};
                 map<string, vector<Type>> functionParamTypes = {{"putchar", {IntType}}, {"getchar", {}}};
                 IR ir;
+                map<string, int> arraySizeByScopedName;
                 // Scope stack: each entry maps source name -> scoped IR name
                 vector<map<string, string>> scopeStack;
 
