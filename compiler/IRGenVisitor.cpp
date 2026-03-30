@@ -490,10 +490,12 @@ antlrcpp::Any IRGenVisitor::visitBlock(ifccParser::BlockContext *ctx)
 
 antlrcpp::Any IRGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
-    if (ctx->TYPE()->getText() == "void" && ctx->ptr_suffix()->getText().empty()) return 0;
-    currentDeclType = parseDeclaredType(ctx->TYPE()->getText(), ctx->ptr_suffix(), currentDeclPointeeType, currentDeclPointerDepth);
-    for (auto *item : ctx->decl_item()) {
-        this->visit(item);
+    auto items = ctx->decl_item();
+    auto ptrSuffixes = ctx->ptr_suffix();
+
+    for (size_t i = 0; i < items.size(); i++) {
+        currentDeclType = parseDeclaredType(ctx->TYPE()->getText(), ptrSuffixes[i], currentDeclPointeeType, currentDeclPointerDepth);
+        this->visit(items[i]);
     }
     return 0;
 }

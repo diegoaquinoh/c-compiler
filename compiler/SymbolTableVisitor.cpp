@@ -619,15 +619,19 @@ antlrcpp::Any SymbolTableVisitor::visitBlock(ifccParser::BlockContext *ctx) {
 }
 
 antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
-    if (ctx->TYPE()->getText() == "void" && ctx->ptr_suffix()->getText().empty()) {
-        cerr << "error: variable has incomplete type 'void'\n";
-        errorFlag = true;
-        return 0;
-    }
-    // On memorise le type de declaration pour tous les decl_item de l'instruction
-    currentDeclType = parseDeclaredType(ctx->TYPE()->getText(), ctx->ptr_suffix(), currentDeclPointeeType, currentDeclPointerDepth);
-    for (auto *item : ctx->decl_item()) {
-        this->visit(item);
+    auto items = ctx->decl_item();
+    auto ptrSuffixes = ctx->ptr_suffix();
+
+    for (size_t i = 0; i < items.size(); i++) {
+        if (ctx->TYPE()->getText() == "void") {
+            cerr << "error: variable has incomplete type 'void'\n";
+            errorFlag = true;
+            continue;
+        }
+
+        // Chaque declarateur peut avoir son propre niveau d'indirection
+        currentDeclType = parseDeclaredType(ctx->TYPE()->getText(), ptrSuffixes[i], currentDeclPointeeType, currentDeclPointerDepth);
+        this->visit(items[i]);
     }
     return 0;
 }
