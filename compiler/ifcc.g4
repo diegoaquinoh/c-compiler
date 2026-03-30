@@ -20,7 +20,7 @@ stmt : decl_stmt
      | block
      ;
 
-decl_stmt : TYPE ptr_suffix decl_item (',' decl_item)* ';' ;
+decl_stmt : TYPE ptr_suffix decl_item (',' ptr_suffix decl_item)* ';' ;
 decl_item : VAR ('[' CONST ']')? ('=' expr)? ;
 
 if_stmt: 'if' '(' expr ')' block (else_stmt)? ;
