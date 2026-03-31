@@ -258,30 +258,15 @@ string IRGenVisitor::createVariableTmp(Type t) {
 }
 
 string IRGenVisitor::emitArrayElementOffset(const string &arrayScopedName, ifccParser::ExprContext *indexExpr) {
-    // Etape 1: evaluer l'indice dans l'accumulateur (!reg)
-    Type indexType = inferExprType(indexExpr);
-    this->visit(indexExpr);
-    ensureValueInReg(indexType, IntType);
-
-    string indexTmp = createVariableTmp(IntType);
-    vector<string> saveIndex = {indexTmp, ireg};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, IntType, saveIndex);
-
-    string elemSizeTmp = createVariableTmp(IntType);
-    vector<string> ldElemSize = {elemSizeTmp, "8"};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, ldElemSize);
-
-    // Etape 2: offset element = index * tailleCase
-    string scaledIndexTmp = createVariableTmp(IntType);
-    vector<string> scaleIndex = {scaledIndexTmp, indexTmp, elemSizeTmp};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::mul, IntType, scaleIndex);
+    // On calcule la taille d'une case (équivalent à la taille d'une adresse)
+    string scaledIndexTmp = emitScaledPointerOffset(indexExpr, ARRAY_ELEMENT_SIZE);
 
     string baseOffsetTmp = createVariableTmp(IntType);
     int baseOffset = this->ir.currentCfg->get_var_frame_offset(arrayScopedName);
     vector<string> ldBaseOffset = {baseOffsetTmp, to_string(baseOffset)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, ldBaseOffset);
 
-    // Etape 3: offset final relatif a %rbp
+    // offset final relatif a %rbp
     // La pile croit vers les adresses basses, l'element i est a (base - i * tailleCase)
     string finalOffsetTmp = createVariableTmp(IntType);
     vector<string> sumOffset = {finalOffsetTmp, baseOffsetTmp, scaledIndexTmp};
