@@ -83,8 +83,8 @@ void IR::gen_arm(ostream &o) {
 }
 
 int CFG::get_var_index_arm(string name){
-    // Keep 8-byte slots so frame offsets match the IR-level offset arithmetic.
-    return -8 * this->SymbolIndex.at(name);
+    int index = this->SymbolIndex.at(name);
+    return -4 * index;
 }
 
 void CFG::gen_arm_prologue(ostream &o){
@@ -104,7 +104,7 @@ void CFG::gen_arm_prologue(ostream &o){
     this->add_to_symbol_table("!reg", IntType);
     this->add_to_symbol_table("!freg", DoubleType);
 
-    int size = this->nextFreeSymbolIndex * 8;
+    int size = this->nextFreeSymbolIndex * 4;
     // Add padding for temp variables created during codegen
     size += 64;
 

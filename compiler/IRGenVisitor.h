@@ -8,8 +8,6 @@
 #include <vector>
 using namespace std;
 
-const int ARRAY_ELEMENT_SIZE = 8;
-
 class IRGenVisitor : public ifccBaseVisitor {
     public:
             using ifccBaseVisitor::visit;
@@ -71,6 +69,7 @@ class IRGenVisitor : public ifccBaseVisitor {
         private:
                 Type inferExprType(ifccParser::ExprContext *ctx);
                 bool inferPointerInfo(ifccParser::ExprContext *ctx, Type &outBaseType, int &outDepth);
+                int storageSizeForType(Type t) const;
                 int pointerElementSize(Type baseType, int depth) const;
                 string activeReg(Type t) const;
                 void emitConvert(Type src, Type dst, const string &srcName, const string &dstName);

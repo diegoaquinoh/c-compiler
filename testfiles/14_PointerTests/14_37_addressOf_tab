@@ -1,0 +1,6 @@
+int main() {
+    int t[3];
+    int *p = &t[0];
+    int *q = &t[2];
+    return q - p;  
+}

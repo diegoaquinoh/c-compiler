@@ -37,9 +37,19 @@ Type IRGenVisitor::parseDeclaredType(const string &typeText, ifccParser::Ptr_suf
 }
 
 int IRGenVisitor::pointerElementSize(Type baseType, int depth) const {
-    if (depth > 1) return 8;
+    /* if (depth > 1) return 8;
     if (baseType == DoubleType) return 8;
     if (baseType == VoidType) return 1;
+    return 4;
+ */
+    if (baseType == VoidType) {
+        return 1;
+    }
+    return storageSizeForType(baseType);
+}
+
+int IRGenVisitor::storageSizeForType(Type t) const {
+    if (t == DoubleType || t == PointerType) return 8;
     return 4;
 }
 
@@ -258,8 +268,9 @@ string IRGenVisitor::createVariableTmp(Type t) {
 }
 
 string IRGenVisitor::emitArrayElementOffset(const string &arrayScopedName, ifccParser::ExprContext *indexExpr) {
-    // On calcule la taille d'une case (équivalent à la taille d'une adresse)
-    string scaledIndexTmp = emitScaledPointerOffset(indexExpr, ARRAY_ELEMENT_SIZE);
+    Type elemType = this->ir.currentCfg->get_var_type(arrayScopedName);
+    int elemSize = storageSizeForType(elemType);
+    string scaledIndexTmp = emitScaledPointerOffset(indexExpr, elemSize);
 
     string baseOffsetTmp = createVariableTmp(IntType);
     int baseOffset = this->ir.currentCfg->get_var_frame_offset(arrayScopedName);
@@ -1145,10 +1156,24 @@ antlrcpp::Any IRGenVisitor::visitDeref(ifccParser::DerefContext *ctx) {
 }
 
 antlrcpp::Any IRGenVisitor::visitAddressOf(ifccParser::AddressOfContext *ctx) {
+    // Premier cas : &var
     if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx->expr())) {
         string irName = scopedName(v->VAR()->getText());
         vector<string> addr = {preg, irName};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::addrof, PointerType, addr);
+        return 0;
+    }
+
+    // cas &tab[i]
+    if (auto *a = dynamic_cast<ifccParser::ArrayAccessContext *>(ctx->expr())) {
+        string arrayScopedName = scopedName(a->VAR()->getText());
+        Type elemType = this->ir.currentCfg->get_var_type(arrayScopedName);
+        int elemSize = storageSizeForType(elemType);
+
+        // &tab[i] = &tab[0] - i * sizeof(tab[0]).
+        string scaledIndexTmp = emitScaledPointerOffset(a->expr(), elemSize);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::addrof, PointerType, {preg, arrayScopedName});
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, PointerType, {preg, preg, scaledIndexTmp});
         return 0;
     }
 
