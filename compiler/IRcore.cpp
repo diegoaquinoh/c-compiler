@@ -28,9 +28,9 @@ void CFG::add_to_symbol_table(string name, Type t){
         this->nextFreeSymbolIndex += 1;
     }
 
-    this->SymbolType[name] = t;
-    this->SymbolIndex[name] = this->nextFreeSymbolIndex;
     this->nextFreeSymbolIndex += symbolSize;
+    this->SymbolIndex[name] = this->nextFreeSymbolIndex;
+    this->SymbolType[name] = t;
 }
 
 int CFG::get_var_frame_offset(string name){

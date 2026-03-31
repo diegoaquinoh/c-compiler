@@ -37,11 +37,6 @@ Type IRGenVisitor::parseDeclaredType(const string &typeText, ifccParser::Ptr_suf
 }
 
 int IRGenVisitor::pointerElementSize(Type baseType, int depth) const {
-    /* if (depth > 1) return 8;
-    if (baseType == DoubleType) return 8;
-    if (baseType == VoidType) return 1;
-    return 4;
- */
     if (baseType == VoidType) {
         return 1;
     }
@@ -273,15 +268,14 @@ string IRGenVisitor::emitArrayElementOffset(const string &arrayScopedName, ifccP
     string scaledIndexTmp = emitScaledPointerOffset(indexExpr, elemSize);
 
     string baseOffsetTmp = createVariableTmp(IntType);
-    int baseOffset = this->ir.currentCfg->get_var_frame_offset(arrayScopedName);
-    vector<string> ldBaseOffset = {baseOffsetTmp, to_string(baseOffset)};
+    int baseOffset = this->ir.currentCfg->get_var_frame_offset(arrayScopedName);    vector<string> ldBaseOffset = {baseOffsetTmp, to_string(baseOffset)};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::ldconst, IntType, ldBaseOffset);
 
     // offset final relatif a %rbp
-    // La pile croit vers les adresses basses, l'element i est a (base - i * tailleCase)
+    // La pile croit vers les adresses hautes, l'element i est a (base + i * tailleCase)
     string finalOffsetTmp = createVariableTmp(IntType);
     vector<string> sumOffset = {finalOffsetTmp, baseOffsetTmp, scaledIndexTmp};
-    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, IntType, sumOffset);
+    this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, IntType, sumOffset);
 
     return finalOffsetTmp;
 }
@@ -500,7 +494,7 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
 {
     string varName = ctx->VAR()->getText();
     string irName = declareScoped(varName);
-    this->ir.currentCfg->add_to_symbol_table(irName, currentDeclType);
+    
     if (currentDeclType == PointerType) {
         pointerPointeeTypeByScopedName[irName] = currentDeclPointeeType;
         pointerDepthByScopedName[irName] = currentDeclPointerDepth;
@@ -517,6 +511,9 @@ antlrcpp::Any IRGenVisitor::visitDecl_item(ifccParser::Decl_itemContext *ctx)
             this->ir.currentCfg->add_to_symbol_table(irName + "#" + to_string(i), currentDeclType);
         }
     }
+    // Je l'ajoute maintenant pour que la base du tableau (tab[0]) sot après les autres cases
+    // Pour pouvoir utiliser un adressage croissant (comme en c)
+    this->ir.currentCfg->add_to_symbol_table(irName, currentDeclType);
 
     if (ctx->expr()) {
         // Initialisation: evaluer l'expression, convertir si besoin, puis copier vers la variable.
@@ -1170,10 +1167,11 @@ antlrcpp::Any IRGenVisitor::visitAddressOf(ifccParser::AddressOfContext *ctx) {
         Type elemType = this->ir.currentCfg->get_var_type(arrayScopedName);
         int elemSize = storageSizeForType(elemType);
 
-        // &tab[i] = &tab[0] - i * sizeof(tab[0]).
+        // &tab[i] = &tab[0] + i * sizeof(tab[0]).
         string scaledIndexTmp = emitScaledPointerOffset(a->expr(), elemSize);
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::addrof, PointerType, {preg, arrayScopedName});
-        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, PointerType, {preg, preg, scaledIndexTmp});
+
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::add, PointerType, {preg, scaledIndexTmp, preg});
         return 0;
     }
 
