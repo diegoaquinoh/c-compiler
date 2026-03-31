@@ -872,7 +872,6 @@ antlrcpp::Any SymbolTableVisitor::visitEquality(ifccParser::EqualityContext *ctx
 
 antlrcpp::Any SymbolTableVisitor::visitWhile_stmt(ifccParser::While_stmtContext *ctx) {
     inferExprType(ctx->expr());
-    this->visit(ctx->expr());
     enterScope();
     for (auto stmt : ctx->stmt()) {
         this->visit(stmt);
@@ -880,3 +879,4 @@ antlrcpp::Any SymbolTableVisitor::visitWhile_stmt(ifccParser::While_stmtContext 
     exitScope();
     return 0;
 }
+
