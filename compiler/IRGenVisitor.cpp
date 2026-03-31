@@ -364,11 +364,14 @@ antlrcpp::Any IRGenVisitor::visitFunc(ifccParser::FuncContext *ctx)
             paramPointerDepths.push_back(pdepth);
         }
     }
+
+    // We save the function signature info even for prototypes, as it will be needed for type checking of calls in IRGenVisitor
+    functionParamTypes[funcName] = paramTypes;
+    functionParamPointeeTypes[funcName] = paramPointeeTypes;
+    functionParamPointerDepths[funcName] = paramPointerDepths;
+
     if (ctx->block() == nullptr) {
-        functionParamTypes[funcName] = paramTypes;
-        functionParamPointeeTypes[funcName] = paramPointeeTypes;
-        functionParamPointerDepths[funcName] = paramPointerDepths;
-        return 0;
+        return 0; // No instructions to generate for a prototype
     }
 
     // Full function definition — create CFG and generate IR
@@ -383,37 +386,19 @@ antlrcpp::Any IRGenVisitor::visitFunc(ifccParser::FuncContext *ctx)
     pointerDepthByScopedName.clear();
     enterScope(); // function-level scope
 
-    // Register parameter names and types
+    // Register parameter names and types in the CFG
     if (ctx->param_list()) {
         auto params = ctx->param_list()->VAR();
-        auto types = ctx->param_list()->TYPE();
-        auto ptrSuffixes = ctx->param_list()->ptr_suffix();
-        vector<Type> definitionParamTypes;
-        vector<Type> definitionParamPointeeTypes;
-        vector<int> definitionParamPointerDepths;
         for (size_t i = 0; i < params.size(); i++) {
             string paramName = params[i]->getText();
             string irName = declareScoped(paramName);
             cfg->paramNames.push_back(irName);
-            Type pointee = IntType;
-            int pdepth = 0;
-            Type paramType = parseDeclaredType(types[i]->getText(), i < ptrSuffixes.size() ? ptrSuffixes[i] : nullptr, pointee, pdepth);
-            definitionParamTypes.push_back(paramType);
-            definitionParamPointeeTypes.push_back(pointee);
-            definitionParamPointerDepths.push_back(pdepth);
-            cfg->add_to_symbol_table(irName, paramType);
-            if (paramType == PointerType) {
-                pointerPointeeTypeByScopedName[irName] = pointee;
-                pointerDepthByScopedName[irName] = pdepth;
+            cfg->add_to_symbol_table(irName, paramTypes[i]);
+            if (paramTypes[i] == PointerType) {
+                pointerPointeeTypeByScopedName[irName] = paramPointeeTypes[i];
+                pointerDepthByScopedName[irName] = paramPointerDepths[i];
             }
         }
-        functionParamTypes[funcName] = definitionParamTypes;
-        functionParamPointeeTypes[funcName] = definitionParamPointeeTypes;
-        functionParamPointerDepths[funcName] = definitionParamPointerDepths;
-    } else {
-        functionParamTypes[funcName] = {};
-        functionParamPointeeTypes[funcName] = {};
-        functionParamPointerDepths[funcName] = {};
     }
 
     // Set up basic blocks: prologue -> body -> epilogue
