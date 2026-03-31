@@ -1145,10 +1145,22 @@ antlrcpp::Any IRGenVisitor::visitDeref(ifccParser::DerefContext *ctx) {
 }
 
 antlrcpp::Any IRGenVisitor::visitAddressOf(ifccParser::AddressOfContext *ctx) {
+    // Premier cas : &var
     if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx->expr())) {
         string irName = scopedName(v->VAR()->getText());
         vector<string> addr = {preg, irName};
         this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::addrof, PointerType, addr);
+        return 0;
+    }
+
+    // cas &tab[i]
+    if (auto *a = dynamic_cast<ifccParser::ArrayAccessContext *>(ctx->expr())) {
+        string arrayScopedName = scopedName(a->VAR()->getText());
+
+        // &tab[i] = &tab[0] - i * sizeof(tab[0]).
+        string scaledIndexTmp = emitScaledPointerOffset(a->expr(), ARRAY_ELEMENT_SIZE);
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::addrof, PointerType, {preg, arrayScopedName});
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::sub, PointerType, {preg, preg, scaledIndexTmp});
         return 0;
     }
 
