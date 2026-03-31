@@ -8,6 +8,7 @@
 #include <vector>
 using namespace std;
 
+const int ARRAY_ELEMENT_SIZE = 8;
 
 class IRGenVisitor : public ifccBaseVisitor {
     public:
