@@ -19,14 +19,23 @@ void CFG::add_to_symbol_table(string name, Type t){
     if (this->SymbolIndex.find(name) != this->SymbolIndex.end()) {
         return;
     }
+    
+    // Ici la taille manipulée n'est pas une taille machine mais une taille "abstraite"
+    // On précise qu'un int est deux fois plus petit qu'un double ou pointer
+    int symbolSize = (t == DoubleType || t == PointerType) ? 2 : 1;
+    // Puis on aligne, sinon on va écraser celle d'avant
+    if (symbolSize == 2 && (this->nextFreeSymbolIndex % 2) != 0) {
+        this->nextFreeSymbolIndex += 1;
+    }
 
     this->SymbolType[name] = t;
     this->SymbolIndex[name] = this->nextFreeSymbolIndex;
-    this->nextFreeSymbolIndex += (t == DoubleType) ? 2 : 1;
+    this->nextFreeSymbolIndex += symbolSize;
 }
 
 int CFG::get_var_frame_offset(string name){
-    return this->SymbolIndex.at(name) * -8;
+    int index = this->SymbolIndex.at(name);
+    return index * -4;
 }
 
 Type CFG::get_var_type(string name){

@@ -38,8 +38,7 @@ void CFG::gen_x86_prologue(ostream &o, const string& functionName){
     o << "    movq %rsp, %rbp\n";
 
     int stackSlots = this->nextFreeSymbolIndex + 2;
-    // Les double sont sur 8 octets donc on aligne sur des cases mémoires de 8
-    int stackSize = stackSlots * 8;
+    int stackSize = stackSlots * 4;
     int allocSize = (stackSize + 64 + 15) & ~15;
     if (allocSize > 0) {
         o << "    subq $" << allocSize << ", %rsp\n";
@@ -71,7 +70,8 @@ void CFG::gen_x86_epilogue(ostream &o){
 }
 
 int CFG::get_var_index_x86(string name){
-    return this->SymbolIndex.at(name) * -8;
+    int index = this->SymbolIndex.at(name);
+    return index * -4;
 }
 
 void BasicBlock::gen_x86(ostream &o) {
