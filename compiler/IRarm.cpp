@@ -21,7 +21,7 @@ static void emitLoadImm64(ostream &o, const string &reg, uint64_t value) {
 
     o << "    movz " << reg << ", #" << p0 << "\n";
     if (p1 != 0) o << "    movk " << reg << ", #" << p1 << ", lsl #16\n";
-    if (p2 != 0) o << "    movk " << reg << ", #" << p2 << ", lsl #32\n";
+    if (p2 != 0) o << "    movk " << reg << ", #" << p2 << ", lsl #32s\n";
     if (p3 != 0) o << "    movk " << reg << ", #" << p3 << ", lsl #48\n";
 }
 
@@ -49,22 +49,12 @@ static void emitFpAddress(ostream &o, int offset, const string &addrReg = "x9") 
     }
 }
 
-static void emitLoadWFromStack(ostream &o, const string &reg, int offset) {
+static void emitLoadFromStack(ostream &o, const string &reg, int offset) {
     emitFpAddress(o, offset);
     o << "    ldr " << reg << ", [x9]\n";
 }
 
-static void emitStoreWToStack(ostream &o, const string &reg, int offset) {
-    emitFpAddress(o, offset);
-    o << "    str " << reg << ", [x9]\n";
-}
-
-static void emitLoadDFromStack(ostream &o, const string &reg, int offset) {
-    emitFpAddress(o, offset);
-    o << "    ldr " << reg << ", [x9]\n";
-}
-
-static void emitStoreDToStack(ostream &o, const string &reg, int offset) {
+static void emitStoreToStack(ostream &o, const string &reg, int offset) {
     emitFpAddress(o, offset);
     o << "    str " << reg << ", [x9]\n";
 }
@@ -103,6 +93,7 @@ void CFG::gen_arm_prologue(ostream &o){
     // Reserve internal accumulators used by IR lowering.
     this->add_to_symbol_table("!reg", IntType);
     this->add_to_symbol_table("!freg", DoubleType);
+    this->add_to_symbol_table("!preg", PointerType);
 
     int size = this->nextFreeSymbolIndex * 4;
     // Add padding for temp variables created during codegen
@@ -114,15 +105,18 @@ void CFG::gen_arm_prologue(ostream &o){
 
     // Copy parameters from registers to stack slots
     const char* intArgRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+    const char* ptrArgRegs[] = {"x0", "x1", "x2", "x3", "x4", "x5"};
     const char* dblArgRegs[] = {"d0", "d1", "d2", "d3", "d4", "d5"};
-    int intIdx = 0, dblIdx = 0;
+    int gpIdx = 0, dblIdx = 0;
     for (size_t i = 0; i < paramNames.size() && i < 6; i++) {
         int idx = get_var_index_arm(paramNames[i]);
         Type paramType = get_var_type(paramNames[i]);
         if (paramType == DoubleType) {
-            emitStoreDToStack(o, dblArgRegs[dblIdx++], idx);
+            emitStoreToStack(o, dblArgRegs[dblIdx++], idx);
+        } else if (paramType == PointerType) {
+            emitStoreToStack(o, ptrArgRegs[gpIdx++], idx);
         } else {
-            emitStoreWToStack(o, intArgRegs[intIdx++], idx);
+            emitStoreToStack(o, intArgRegs[gpIdx++], idx);
         }
     }
 }
@@ -147,7 +141,7 @@ void BasicBlock::gen_arm(ostream &o) {
         o << "    b " << exit_true->label << "\n";
     } else {
         int testIdx = cfg->get_var_index_arm(test_var_name);
-        emitLoadWFromStack(o, "w8", testIdx);
+        emitLoadFromStack(o, "w8", testIdx);
         o << "    cbz w8, " << exit_false->label << "\n";
         o << "    b " << exit_true->label << "\n";
     }
@@ -175,11 +169,15 @@ void IRInstr::gen_arm(ostream &o) {
                 std::memcpy(&bits, &value, sizeof(bits));
                 emitLoadImm64(o, "x8", bits);
                 o << "    fmov d0, x8\n";
-                emitStoreDToStack(o, "d0", index1);
+                emitStoreToStack(o, "d0", index1);
+            } else if (this->t == PointerType) {
+                uint64_t nb64 = static_cast<uint64_t>(stoll(this->params.at(1)));
+                emitLoadImm64(o, "x8", nb64);
+                emitStoreToStack(o, "x8", index1);
             } else {
                 nb = stoi(this->params.at(1));
                 emitLoadImm32(o, "w8", nb);
-                emitStoreWToStack(o, "w8", index1);
+                emitStoreToStack(o, "w8", index1);
             }
             break;
         case IRInstr::add:
@@ -194,15 +192,35 @@ void IRInstr::gen_arm(ostream &o) {
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fadd d0, d0, d1\n";
-                emitStoreDToStack(o, "d0", index1);
+                emitStoreToStack(o, "d0", index1);
+            } else if (this->t == PointerType) {
+                Type type2 = this->bb->cfg->get_var_type(nameVar2);
+                Type type3 = this->bb->cfg->get_var_type(nameVar3);
+
+                if (type2 == PointerType) {
+                    emitLoadFromStack(o, "x8", index2);
+                } else {
+                    emitLoadFromStack(o, "w8", index2);
+                    o << "    sxtw x8, w8\n";
+                }
+
+                if (type3 == PointerType) {
+                    emitLoadFromStack(o, "x9", index3);
+                } else {
+                    emitLoadFromStack(o, "w9", index3);
+                    o << "    sxtw x9, w9\n";
+                }
+
+                o << "    add x0, x8, x9\n";
+                emitStoreToStack(o, "x0", index1);
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    add w0, w8, w9\n";
-                emitStoreWToStack(o, "w0", index1);
+                emitStoreToStack(o, "w0", index1);
             }
 
             break;
@@ -218,15 +236,35 @@ void IRInstr::gen_arm(ostream &o) {
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fsub d0, d0, d1\n";
-                emitStoreDToStack(o, "d0", index1);
+                emitStoreToStack(o, "d0", index1);
+            } else if (this->t == PointerType) {
+                Type type2 = this->bb->cfg->get_var_type(nameVar2);
+                Type type3 = this->bb->cfg->get_var_type(nameVar3);
+
+                if (type2 == PointerType) {
+                    emitLoadFromStack(o, "x8", index2);
+                } else {
+                    emitLoadFromStack(o, "w8", index2);
+                    o << "    sxtw x8, w8\n";
+                }
+
+                if (type3 == PointerType) {
+                    emitLoadFromStack(o, "x9", index3);
+                } else {
+                    emitLoadFromStack(o, "w9", index3);
+                    o << "    sxtw x9, w9\n";
+                }
+
+                o << "    sub x0, x8, x9\n";
+                emitStoreToStack(o, "x0", index1);
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    subs w0, w8, w9\n";
-                emitStoreWToStack(o, "w0", index1);
+                emitStoreToStack(o, "w0", index1);
             }
             break;
         case IRInstr::copy:
@@ -240,11 +278,14 @@ void IRInstr::gen_arm(ostream &o) {
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitStoreDToStack(o, "d0", index1);
+                emitLoadFromStack(o, "d0", index2);
+                emitStoreToStack(o, "d0", index1);
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x0", index2);
+                emitStoreToStack(o, "x0", index1);
             } else {
-                emitLoadWFromStack(o, "w0", index2);
-                emitStoreWToStack(o, "w0", index1);
+                emitLoadFromStack(o, "w0", index2);
+                emitStoreToStack(o, "w0", index1);
             }
 
             break;
@@ -254,9 +295,11 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index1);
+                emitLoadFromStack(o, "d0", index1);
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x0", index1);
             } else {
-                emitLoadWFromStack(o, "w0", index1);
+                emitLoadFromStack(o, "w0", index1);
             }
             o << "    b " << this->bb->cfg->functionName << "_end\n";
             break;
@@ -265,14 +308,14 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index1);
+                emitLoadFromStack(o, "d0", index1);
                 o << "    fneg d0, d0\n";
-                emitStoreDToStack(o, "d0", index1);
+                emitStoreToStack(o, "d0", index1);
             } else {
                 // Negation is lowered as 0 - operand.
-                emitLoadWFromStack(o, "w8", index1);
+                emitLoadFromStack(o, "w8", index1);
                 o << "    sub w0, wzr, w8\n";
-                emitStoreWToStack(o, "w0", index1);
+                emitStoreToStack(o, "w0", index1);
             }
             break;
         case IRInstr::mul:
@@ -287,15 +330,15 @@ void IRInstr::gen_arm(ostream &o) {
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fmul d0, d0, d1\n";
-                emitStoreDToStack(o, "d0", index1);
+                emitStoreToStack(o, "d0", index1);
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    mul w0, w8, w9\n";
-                emitStoreWToStack(o, "w0", index1);
+                emitStoreToStack(o, "w0", index1);
             }
             break;
         case IRInstr::div:
@@ -310,15 +353,15 @@ void IRInstr::gen_arm(ostream &o) {
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fdiv d0, d0, d1\n";
-                emitStoreDToStack(o, "d0", index1);
+                emitStoreToStack(o, "d0", index1);
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    sdiv w0, w8, w9\n";
-                emitStoreWToStack(o, "w0", index1);
+                emitStoreToStack(o, "w0", index1);
             }
             break;
         case IRInstr::mod:
@@ -337,12 +380,12 @@ void IRInstr::gen_arm(ostream &o) {
             // a = p // q (div entière)
             // b = a * q (= n - r)
             // r = p - b
-            emitLoadWFromStack(o, "w8", index2);
-            emitLoadWFromStack(o, "w9", index3);
+            emitLoadFromStack(o, "w8", index2);
+            emitLoadFromStack(o, "w9", index3);
             o << "    sdiv w10, w8, w9" << endl;
             o << "    mul w10, w10, w9" << endl;
             o << "    sub w0, w8, w10" << endl;
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
 
             break;
         case IRInstr::lnot:
@@ -356,10 +399,10 @@ void IRInstr::gen_arm(ostream &o) {
 
             // On fait comme gcc, on utilise le fait que subs va positionner le flag Z si le résultat est nul 
             // eq est un test pour savoir si z == 1
-            emitLoadWFromStack(o, "w8", index2);
+            emitLoadFromStack(o, "w8", index2);
             o << "    subs w8, w8, #0" << endl;
             o << "    cset w0, eq" << endl;
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
 
             break;
         case IRInstr::call: {
@@ -367,16 +410,19 @@ void IRInstr::gen_arm(ostream &o) {
             string funcCallName = this->params.at(1);
 
             const char* intCallArgRegs[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+            const char* ptrCallArgRegs[] = {"x0", "x1", "x2", "x3", "x4", "x5"};
             const char* dblCallArgRegs[] = {"d0", "d1", "d2", "d3", "d4", "d5"};
-            int intIdx = 0, dblIdx = 0;
+            int gpIdx = 0, dblIdx = 0;
 
             for (size_t i = 2; i < this->params.size(); i++) {
                 Type argT = this->bb->cfg->get_var_type(this->params.at(i));
                 int argIndex = this->bb->cfg->get_var_index_arm(this->params.at(i));
                 if (argT == DoubleType) {
-                    emitLoadDFromStack(o, dblCallArgRegs[dblIdx++], argIndex);
+                    emitLoadFromStack(o, dblCallArgRegs[dblIdx++], argIndex);
+                } else if (argT == PointerType) {
+                    emitLoadFromStack(o, ptrCallArgRegs[gpIdx++], argIndex);
                 } else {
-                    emitLoadWFromStack(o, intCallArgRegs[intIdx++], argIndex);
+                    emitLoadFromStack(o, intCallArgRegs[gpIdx++], argIndex);
                 }
             }
 
@@ -389,9 +435,11 @@ void IRInstr::gen_arm(ostream &o) {
             this->bb->cfg->add_to_symbol_table(dest, this->t);
             int destIndex = this->bb->cfg->get_var_index_arm(dest);
             if (this->t == DoubleType) {
-                emitStoreDToStack(o, "d0", destIndex);
+                emitStoreToStack(o, "d0", destIndex);
+            } else if (this->t == PointerType) {
+                emitStoreToStack(o, "x0", destIndex);
             } else {
-                emitStoreWToStack(o, "w0", destIndex);
+                emitStoreToStack(o, "w0", destIndex);
             }
             break;
         }
@@ -403,9 +451,9 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
 
-            emitLoadWFromStack(o, "w8", index2);
+            emitLoadFromStack(o, "w8", index2);
             o << "    scvtf d0, w8\n";
-            emitStoreDToStack(o, "d0", index1);
+            emitStoreToStack(o, "d0", index1);
             break;
         case IRInstr::dtoi:
             // var1 (int) = (int) var2 (double)
@@ -415,9 +463,9 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
 
-            emitLoadDFromStack(o, "d0", index2);
+            emitLoadFromStack(o, "d0", index2);
             o << "    fcvtzs w8, d0\n";
-            emitStoreWToStack(o, "w8", index1);
+            emitStoreToStack(o, "w8", index1);
             break;
         case IRInstr::wmem:
             // *(x29 + offsetVar) = valueVar
@@ -427,14 +475,17 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
 
-            emitLoadWFromStack(o, "w8", index1);
+            emitLoadFromStack(o, "w8", index1);
             o << "    sxtw x8, w8\n";
             o << "    add x8, x29, x8\n";
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d0", index2);
                 o << "    str d0, [x8]\n";
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x0", index2);
+                o << "    str x0, [x8]\n";
             } else {
-                emitLoadWFromStack(o, "w0", index2);
+                emitLoadFromStack(o, "w0", index2);
                 o << "    str w0, [x8]\n";
             }
             break;
@@ -447,15 +498,18 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
 
-            emitLoadWFromStack(o, "w8", index2);
+            emitLoadFromStack(o, "w8", index2);
             o << "    sxtw x8, w8\n";
             o << "    add x8, x29, x8\n";
             if (this->t == DoubleType) {
                 o << "    ldr d0, [x8]\n";
-                emitStoreDToStack(o, "d0", index1);
+                emitStoreToStack(o, "d0", index1);
+            } else if (this->t == PointerType) {
+                o << "    ldr x0, [x8]\n";
+                emitStoreToStack(o, "x0", index1);
             } else {
                 o << "    ldr w0, [x8]\n";
-                emitStoreWToStack(o, "w0", index1);
+                emitStoreToStack(o, "w0", index1);
             }
             break;
         case IRInstr::bxor:
@@ -466,10 +520,10 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
-            emitLoadWFromStack(o, "w8", index2);
-            emitLoadWFromStack(o, "w9", index3);
+            emitLoadFromStack(o, "w8", index2);
+            emitLoadFromStack(o, "w9", index3);
             o << "    eor w0, w8, w9\n";
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
             break;
         case IRInstr::bor:
             nameVar1 = this->params.at(0);
@@ -479,10 +533,10 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
-            emitLoadWFromStack(o, "w8", index2);
-            emitLoadWFromStack(o, "w9", index3);
+            emitLoadFromStack(o, "w8", index2);
+            emitLoadFromStack(o, "w9", index3);
             o << "    orr w0, w8, w9\n";
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
             break;
         case IRInstr::band:
             nameVar1 = this->params.at(0);
@@ -492,10 +546,10 @@ void IRInstr::gen_arm(ostream &o) {
             index1 = this->bb->cfg->get_var_index_arm(nameVar1);
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
-            emitLoadWFromStack(o, "w8", index2);
-            emitLoadWFromStack(o, "w9", index3);
+            emitLoadFromStack(o, "w8", index2);
+            emitLoadFromStack(o, "w9", index3);
             o << "    and w0, w8, w9\n";
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
             break;
         case IRInstr::cmp_eq:
             nameVar1 = this->params.at(0);
@@ -506,16 +560,20 @@ void IRInstr::gen_arm(ostream &o) {
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fcmp d0, d1\n";
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x8", index2);
+                emitLoadFromStack(o, "x9", index3);
+                o << "    subs x8, x8, x9\n";
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    subs w8, w8, w9\n";
             }
             o << "    cset w0, eq" << endl;
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
             break;
         case IRInstr::cmp_ne:
             nameVar1 = this->params.at(0);
@@ -526,16 +584,20 @@ void IRInstr::gen_arm(ostream &o) {
             index2 = this->bb->cfg->get_var_index_arm(nameVar2);
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fcmp d0, d1\n";
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x8", index2);
+                emitLoadFromStack(o, "x9", index3);
+                o << "    subs x8, x8, x9\n";
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    subs w8, w8, w9\n";
             }
             o << "    cset w0, ne" << endl;
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
             break;
         case IRInstr::cmp_lt:
             nameVar1 = this->params.at(0);
@@ -547,18 +609,23 @@ void IRInstr::gen_arm(ostream &o) {
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fcmp d0, d1\n";
                 // Use unsigned-lower for floating '<' so NaN is false.
                 o << "    cset w0, lo\n";
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x8", index2);
+                emitLoadFromStack(o, "x9", index3);
+                o << "    subs x8, x8, x9\n";
+                o << "    cset w0, lo\n";
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    subs w8, w8, w9\n";
                 o << "    cset w0, lt\n";
             }
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
             break;
         case IRInstr::cmp_le:
             nameVar1 = this->params.at(0);
@@ -570,18 +637,23 @@ void IRInstr::gen_arm(ostream &o) {
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fcmp d0, d1\n";
                 // Use unsigned-lower-or-same for floating '<=' so NaN is false.
                 o << "    cset w0, ls\n";
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x8", index2);
+                emitLoadFromStack(o, "x9", index3);
+                o << "    subs x8, x8, x9\n";
+                o << "    cset w0, ls\n";
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    subs w8, w8, w9\n";
                 o << "    cset w0, le\n";
             }
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
             break;
         case IRInstr::cmp_gt:
             nameVar1 = this->params.at(0);
@@ -593,17 +665,22 @@ void IRInstr::gen_arm(ostream &o) {
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fcmp d0, d1\n";
                 o << "    cset w0, gt\n";
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x8", index2);
+                emitLoadFromStack(o, "x9", index3);
+                o << "    subs x8, x8, x9\n";
+                o << "    cset w0, hi\n";
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    subs w8, w8, w9\n";
                 o << "    cset w0, gt\n";
             }
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
             break;
         case IRInstr::cmp_ge:
             nameVar1 = this->params.at(0);
@@ -615,17 +692,71 @@ void IRInstr::gen_arm(ostream &o) {
             index3 = this->bb->cfg->get_var_index_arm(nameVar3);
 
             if (this->t == DoubleType) {
-                emitLoadDFromStack(o, "d0", index2);
-                emitLoadDFromStack(o, "d1", index3);
+                emitLoadFromStack(o, "d0", index2);
+                emitLoadFromStack(o, "d1", index3);
                 o << "    fcmp d0, d1\n";
                 o << "    cset w0, ge\n";
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x8", index2);
+                emitLoadFromStack(o, "x9", index3);
+                o << "    subs x8, x8, x9\n";
+                o << "    cset w0, hs\n";
             } else {
-                emitLoadWFromStack(o, "w8", index2);
-                emitLoadWFromStack(o, "w9", index3);
+                emitLoadFromStack(o, "w8", index2);
+                emitLoadFromStack(o, "w9", index3);
                 o << "    subs w8, w8, w9\n";
                 o << "    cset w0, ge\n";
             }
-            emitStoreWToStack(o, "w0", index1);
+            emitStoreToStack(o, "w0", index1);
+            break;
+        case IRInstr::addrof:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+
+            index1 = this->bb->cfg->get_var_index_arm(nameVar1);
+            index2 = this->bb->cfg->get_var_index_arm(nameVar2);
+
+            emitFpAddress(o, index2, "x8");
+            emitStoreToStack(o, "x8", index1);
+            break;
+        case IRInstr::rind:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+
+            this->bb->cfg->add_to_symbol_table(nameVar1, this->t);
+            index1 = this->bb->cfg->get_var_index_arm(nameVar1);
+            index2 = this->bb->cfg->get_var_index_arm(nameVar2);
+
+            emitLoadFromStack(o, "x8", index2);
+            if (this->t == DoubleType) {
+                o << "    ldr d0, [x8]\n";
+                emitStoreToStack(o, "d0", index1);
+            } else if (this->t == PointerType) {
+                o << "    ldr x0, [x8]\n";
+                emitStoreToStack(o, "x0", index1);
+            } else {
+                o << "    ldr w0, [x8]\n";
+                emitStoreToStack(o, "w0", index1);
+            }
+            break;
+        case IRInstr::wind:
+            nameVar1 = this->params.at(0);
+            nameVar2 = this->params.at(1);
+
+            index1 = this->bb->cfg->get_var_index_arm(nameVar1);
+            index2 = this->bb->cfg->get_var_index_arm(nameVar2);
+
+            emitLoadFromStack(o, "x8", index1);
+            if (this->t == DoubleType) {
+                emitLoadFromStack(o, "d0", index2);
+                o << "    str d0, [x8]\n";
+            } else if (this->t == PointerType) {
+                emitLoadFromStack(o, "x0", index2);
+                o << "    str x0, [x8]\n";
+            } else {
+                emitLoadFromStack(o, "w0", index2);
+                o << "    str w0, [x8]\n";
+            }
             break;
         default:
             break;
