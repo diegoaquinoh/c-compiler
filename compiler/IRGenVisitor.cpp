@@ -691,12 +691,16 @@ antlrcpp::Any IRGenVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
     // Evaluate the condition in the current block
     this->visit(ctx->expr());
     if (condType == DoubleType) {
+        // On save la valeur de reg pour ne pas l'écraser
+        string tempName = createVariableTmp(DoubleType);
+        vector<string> v = {activeReg(DoubleType), tempName};
+        this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, DoubleType, v);
         // if attend un booleen entier (sot 0 soit 1 donc) 
         // Si on a un double, on genere (expr != 0.0) (comme si on "castait" la condition en double)
         string zeroTmp = createVariableTmp(DoubleType);
         vector<string> z = {zeroTmp, "0.0"};
         cfg->current_bb->add_IRInstr(IRInstr::ldconst, DoubleType, z);
-        vector<string> cmp = {ireg, freg, zeroTmp};
+        vector<string> cmp = {ireg, tempName, zeroTmp};
         cfg->current_bb->add_IRInstr(IRInstr::cmp_ne, DoubleType, cmp);
     }
     testBB->test_var_name = ireg;
