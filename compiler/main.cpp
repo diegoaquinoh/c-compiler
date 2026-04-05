@@ -35,31 +35,44 @@ public:
 int main(int argn, const char **argv)
 {
     Architectures archiCible = X86;
-  stringstream in;
-  if (argn<=3)
-  {
-     ifstream lecture(argv[1]);
-     if( !lecture.good() )
-     {
-         cerr<<"error: cannot read file: " << argv[1] << endl ;
-         exit(1);
-     }
-     in << lecture.rdbuf();
-     if (argn == 3) {
-        auto itArchi = architecturesByName.find(argv[2]);
-        if (itArchi == architecturesByName.end()) {
-            cerr << "usage: ifcc path/to/file.c [x86|arm|ir]" << endl ;
-            exit(1);
+
+    string outputPath;
+    stringstream in;
+
+    if (argn < 2 || argn > 5) {
+        cerr << "usage: ifcc path/to/file.c [x86|arm|ir] [-o output_file]" << endl;
+        exit(1);
+    }
+
+    const char* inputPath = argv[1];
+    for (int i = 2; i < argn; ++i) {
+        string arg = argv[i];
+        if (arg == "-o") {
+            if (i + 1 >= argn) {
+                cerr << "error: missing output file after -o" << endl;
+                exit(1);
+            }
+            outputPath = argv[++i];
+            continue;
         }
 
-        archiCible = itArchi->second;
-     }
-  }
-  else
-  {
-      cerr << "usage: ifcc path/to/file.c [x86|arm|ir]" << endl ;
-      exit(1);
-  }
+        auto itArchi = architecturesByName.find(arg);
+        if (itArchi != architecturesByName.end()) {
+            archiCible = itArchi->second;
+            continue;
+        }
+
+        cerr << "error: unknown argument: " << arg << endl;
+        cerr << "usage: ifcc path/to/file.c [x86|arm|ir] [-o output_file]" << endl;
+        exit(1);
+    }
+
+    ifstream lecture(inputPath);
+    if (!lecture.good()) {
+        cerr << "error: cannot read file: " << inputPath << endl;
+        exit(1);
+    }
+    in << lecture.rdbuf();
   
   ANTLRInputStream input(in.str());
   StrictErrorListener errorListener;
@@ -95,15 +108,26 @@ int main(int argn, const char **argv)
   IRGenVisitor v;
   v.visit(tree);
 
+  ostream* output = &cout;
+  ofstream outFile;
+  if (!outputPath.empty()) {
+      outFile.open(outputPath);
+      if (!outFile.good()) {
+          cerr << "error: cannot write output file: " << outputPath << endl;
+          exit(1);
+      }
+      output = &outFile;
+  }
+
   switch (archiCible) {
     case X86:
-        v.getIR().gen_x86(std::cout);
+        v.getIR().gen_x86(*output);
         break;
     case ARM:
-        v.getIR().gen_arm(std::cout);
+        v.getIR().gen_arm(*output);
         break;
     case IR:
-        cout << v.getIR().toString();
+        *output << v.getIR().toString();
         break;
   }
   return 0;
