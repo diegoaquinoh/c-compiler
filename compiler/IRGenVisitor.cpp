@@ -64,6 +64,11 @@ bool IRGenVisitor::inferPointerInfo(ifccParser::ExprContext *ctx, Type &outBaseT
 
     if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
         string irName = scopedName(v->VAR()->getText());
+        if (arraySizeByScopedName.find(irName) != arraySizeByScopedName.end()) {
+            // Alors c'est un tableau => pointeur à un niveau
+            outDepth = 0;
+            return true;
+        }
         if (!pointerDepthByScopedName.count(irName)) return false;
         outBaseType = pointerPointeeTypeByScopedName[irName];
         outDepth = pointerDepthByScopedName[irName];
@@ -149,6 +154,11 @@ Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
 
     if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
         string irName = scopedName(v->VAR()->getText());
+        if (arraySizeByScopedName.find(irName) != arraySizeByScopedName.end()) {
+            // Decay : un tableau est comme un pointeur
+            // Donc ici on a juste tab (pas tab[0]) donc bien homogène à un pointeur
+            return PointerType;
+        }
         return this->ir.currentCfg->get_var_type(irName);
     }
 
@@ -162,9 +172,6 @@ Type IRGenVisitor::inferExprType(ifccParser::ExprContext *ctx) {
 
     if (auto *d = dynamic_cast<ifccParser::DerefContext *>(ctx)) {
         Type ptrType = inferExprType(d->expr());
-        if (ptrType != PointerType) {
-            return IntType;
-        }
         Type base = IntType;
         int depth = 0;
         if (inferPointerInfo(d->expr(), base, depth)) {
@@ -654,6 +661,13 @@ antlrcpp::Any IRGenVisitor::visitVar(ifccParser::VarContext *ctx)
     string varName = ctx->VAR()->getText();
     string irName = scopedName(varName);
     Type varType = this->ir.currentCfg->get_var_type(irName);
+
+    if (arraySizeByScopedName.find(irName) != arraySizeByScopedName.end()) {
+            // Decay, on considère le tableau (uniquement la base, ie la variable en elle même) comme un pointeur
+            vector<string> v = {preg, irName};
+            this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::addrof, PointerType, v);
+        return 0;
+    }
 
     vector<string> v = {activeReg(varType), irName};
     this->ir.currentCfg->current_bb->add_IRInstr(IRInstr::copy, varType, v);

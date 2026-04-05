@@ -21,7 +21,7 @@ static void emitLoadImm64(ostream &o, const string &reg, uint64_t value) {
 
     o << "    movz " << reg << ", #" << p0 << "\n";
     if (p1 != 0) o << "    movk " << reg << ", #" << p1 << ", lsl #16\n";
-    if (p2 != 0) o << "    movk " << reg << ", #" << p2 << ", lsl #32s\n";
+    if (p2 != 0) o << "    movk " << reg << ", #" << p2 << ", lsl #32\n";
     if (p3 != 0) o << "    movk " << reg << ", #" << p3 << ", lsl #48\n";
 }
 

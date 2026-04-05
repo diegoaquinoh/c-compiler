@@ -136,11 +136,12 @@ SymbolTableVisitor::ExprTypeInfo SymbolTableVisitor::inferExprType(ifccParser::E
     if (auto *v = dynamic_cast<ifccParser::VarContext *>(ctx)) {
         string name = v->VAR()->getText();
         useVar(name);
-        if (isVarArray(name)) {
-            cerr << "error: array '" << name << "' cannot be used as a scalar expression\n";
-            errorFlag = true;
-        }
         Type t = getVarType(name);
+        if (isVarArray(name)) {
+            // Decay : tab est comme un pointeur en c
+            // tableaux à une dimension uniquement donc un pointeur à une profondeur de un
+            return {PointerType, false, t, 1};
+        }
         if (t == PointerType) {
             return {PointerType, false, getVarPointeeType(name), getVarPointerDepth(name)};
         }
@@ -258,7 +259,7 @@ SymbolTableVisitor::ExprTypeInfo SymbolTableVisitor::inferExprType(ifccParser::E
                 }
                 return {IntType, false, IntType, 0};
             }
-            cerr << "error: invalid operands to binary operator '+'\n";
+            cerr << "error: invalid operands to binary operator '+' : Pointers\n";
             errorFlag = true;
             return {IntType, false, IntType, 0};
         }
@@ -276,7 +277,12 @@ SymbolTableVisitor::ExprTypeInfo SymbolTableVisitor::inferExprType(ifccParser::E
             if (op == "+") {
                 return rhs;
             }
-            cerr << "error: invalid operands to binary operator '-'\n";
+            cerr << "error: invalid operands to binary operator '-' : Int and Pointer\n";
+            errorFlag = true;
+            return {IntType, false, IntType, 0};
+        }
+        if ((lhs.type == PointerType && rhs.type == DoubleType) || (lhs.type == PointerType && rhs.type == DoubleType)) {
+            cerr << "error: invalid operands to binary operator '" << op << "' : Pointer and Double\n";
             errorFlag = true;
             return {IntType, false, IntType, 0};
         }
